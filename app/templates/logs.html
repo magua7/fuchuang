@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} - 日志中心</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+  </head>
+  <body class="dashboard-page" data-page="logs">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">MAGUALINE</span>
+        <h1>日志与告警分析</h1>
+      </div>
+      <div class="topbar-actions">
+        <nav class="nav-tabs">
+          <a href="/dashboard" class="nav-tab {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
+          <a href="/screen" class="nav-tab {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
+          <a href="/logs" class="nav-tab {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
+        </nav>
+        <span id="runtime-user" class="muted-text">admin</span>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </div>
+    </header>
+
+    <main class="dashboard-shell logs-shell">
+      <section class="metrics-grid">
+        <article class="metric-card">
+          <span class="metric-label">24h 总请求</span>
+          <strong id="metric-total">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">24h 拦截次数</span>
+          <strong id="metric-blocked">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">24h 独立源 IP</span>
+          <strong id="metric-ips">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">当前封禁 IP</span>
+          <strong id="metric-manual-blocks">0</strong>
+        </article>
+      </section>
+
+      <section class="alert-metrics-grid">
+        <article class="metric-card metric-card-alert">
+          <span class="metric-label">24h 告警总数</span>
+          <strong id="metric-alert-total">0</strong>
+        </article>
+        <article class="metric-card metric-card-alert high">
+          <span class="metric-label">24h 高危告警</span>
+          <strong id="metric-alert-high">0</strong>
+        </article>
+        <article class="metric-card metric-card-alert pending">
+          <span class="metric-label">待处理</span>
+          <strong id="metric-alert-pending">0</strong>
+        </article>
+        <article class="metric-card metric-card-alert resolved">
+          <span class="metric-label">已处置</span>
+          <strong id="metric-alert-resolved">0</strong>
+        </article>
+      </section>
+
+      <section class="logs-layout">
+        <article class="panel panel-wide">
+          <div class="panel-header panel-header-wrap">
+            <div>
+              <h2>请求与攻击日志</h2>
+              <span class="panel-subtitle">查看流量、拦截、错误与处置动作，支持详情抽屉和筛选</span>
+            </div>
+            <form id="log-filter-form" class="filter-row">
+              <select id="log-action">
+                <option value="">全部动作</option>
+                <option value="blocked">仅拦截</option>
+                <option value="allowed">仅放行</option>
+                <option value="error">仅错误</option>
+              </select>
+              <select id="log-severity">
+                <option value="">全部级别</option>
+                <option value="high">仅高危</option>
+                <option value="medium">仅中危</option>
+                <option value="low">仅低危</option>
+              </select>
+              <select id="log-alert-status">
+                <option value="">全部状态</option>
+                <option value="pending">待处理</option>
+                <option value="resolved">已处置</option>
+              </select>
+              <input id="log-keyword" type="search" placeholder="搜 IP / 路径 / 规则 / CVE" />
+              <button class="ghost-button" type="submit">筛选</button>
+            </form>
+          </div>
+
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>源 IP</th>
+                  <th>方法</th>
+                  <th>路径</th>
+                  <th>动作</th>
+                  <th>级别</th>
+                  <th>处置</th>
+                  <th>规则</th>
+                  <th>状态</th>
+                  <th>耗时</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="logs-body"></tbody>
+            </table>
+          </div>
+
+          <div class="pagination-bar">
+            <div id="logs-pagination-summary" class="pagination-summary">第 1 页</div>
+            <div id="logs-pagination" class="pagination-controls"></div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <div class="panel-header">
+            <h2>日志说明</h2>
+            <span class="panel-subtitle">帮助你快速读懂当前页面</span>
+          </div>
+          <div class="rank-list">
+            <div class="rank-item">
+              <div>
+                <strong>高危</strong>
+                <span class="muted-text">高风险利用、上传、爆破等事件会单独高亮。</span>
+              </div>
+            </div>
+            <div class="rank-item">
+              <div>
+                <strong>放行</strong>
+                <span class="muted-text">请求正常回源到真实站点，不代表完全无风险。</span>
+              </div>
+            </div>
+            <div class="rank-item">
+              <div>
+                <strong>拦截</strong>
+                <span class="muted-text">已命中规则或人工封禁来源。</span>
+              </div>
+            </div>
+            <div class="rank-item">
+              <div>
+                <strong>错误</strong>
+                <span class="muted-text">WAF 无法正常回源，建议联动检查源站健康。</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <div id="log-detail-backdrop" class="detail-backdrop" hidden></div>
+    <aside id="log-detail-drawer" class="detail-drawer" aria-hidden="true">
+      <div class="detail-drawer-header">
+        <div>
+          <span class="eyebrow">DETAIL</span>
+          <h2>告警详情</h2>
+        </div>
+        <button id="log-detail-close" class="ghost-button" type="button">关闭</button>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-card">
+          <span class="detail-label">时间</span>
+          <strong id="detail-created-at">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">源 IP</span>
+          <strong id="detail-client-ip">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">大致位置</span>
+          <strong id="detail-ip-location">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">网络提供商</span>
+          <strong id="detail-ip-isp">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">动作</span>
+          <strong id="detail-action">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">严重级别</span>
+          <strong id="detail-severity">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">处置状态</span>
+          <strong id="detail-alert-status">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">CVE</span>
+          <strong id="detail-cve">-</strong>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <span class="detail-label">请求行</span>
+        <pre id="detail-request-line" class="detail-code"></pre>
+      </div>
+
+      <div class="detail-section">
+        <span class="detail-label">查询参数</span>
+        <pre id="detail-query" class="detail-code"></pre>
+      </div>
+
+      <div class="detail-section">
+        <span class="detail-label">请求头</span>
+        <pre id="detail-headers" class="detail-code"></pre>
+      </div>
+
+      <div class="detail-section">
+        <span class="detail-label">Payload 预览</span>
+        <pre id="detail-payload" class="detail-code"></pre>
+      </div>
+
+      <div class="detail-section">
+        <span class="detail-label">命中说明</span>
+        <pre id="detail-rule" class="detail-code"></pre>
+      </div>
+    </aside>
+
+    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+  </body>
+</html>

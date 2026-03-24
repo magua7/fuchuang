@@ -1,0 +1,844 @@
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    credentials: "same-origin",
+    ...options,
+  });
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    throw new Error((payload && (payload.message || payload.detail)) || "请求失败");
+  }
+
+  return payload;
+}
+
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) {
+    node.textContent = value;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatTime(value) {
+  if (!value) {
+    return "-";
+  }
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function formatCount(value) {
+  return Number(value || 0).toLocaleString("zh-CN");
+}
+
+function isScreenPage() {
+  return document.body.dataset.page === "screen";
+}
+
+const ACTION_LABELS = {
+  allowed: "放行",
+  blocked: "拦截",
+  error: "错误",
+};
+
+const RULE_LABELS = {
+  manual_block: "手动封禁",
+  sql_injection: "SQL 注入",
+  xss: "跨站脚本",
+  path_traversal: "目录穿越",
+  command_injection: "命令注入",
+  scanner_probe: "扫描探测",
+  brute_force: "暴力破解",
+  webshell_upload: "WebShell 上传",
+  cve_exploit_attempt: "CVE 漏洞利用",
+};
+
+const SEVERITY_LABELS = {
+  high: "高危",
+  medium: "中危",
+  low: "低危",
+};
+
+const ALERT_STATUS_LABELS = {
+  pending: "待处理",
+  resolved: "已处置",
+  not_applicable: "-",
+};
+
+const SCREEN_REGION_IDS = {
+  华北: "screen-region-huabei",
+  华东: "screen-region-huadong",
+  华南: "screen-region-huanan",
+  华中: "screen-region-huazhong",
+  西部: "screen-region-xibu",
+  东北: "screen-region-dongbei",
+  本地: "screen-region-bendi",
+  海外: "screen-region-haiwai",
+  未知: "screen-region-haiwai",
+};
+
+const LOGS_PAGE_SIZE = 20;
+let currentLogsPage = 1;
+
+function actionLabel(value) {
+  return ACTION_LABELS[value] || value || "-";
+}
+
+function ruleLabel(value) {
+  return RULE_LABELS[value] || value || "-";
+}
+
+function severityLabel(value) {
+  return SEVERITY_LABELS[value] || value || "-";
+}
+
+function alertStatusLabel(value) {
+  return ALERT_STATUS_LABELS[value] || value || "-";
+}
+
+function formatHeaders(headers) {
+  if (!headers || typeof headers !== "object" || !Object.keys(headers).length) {
+    return "无请求头记录";
+  }
+  return Object.entries(headers)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
+}
+
+function buildAnalysisNarrative(overview) {
+  const total = Number(overview.total_requests || 0);
+  const blocked = Number(overview.blocked_requests || 0);
+  const uniqueIps = Number(overview.unique_ips || 0);
+  const topAttackList = Array.isArray(overview.top_attack_types) ? overview.top_attack_types : [];
+  const topAttack = topAttackList[0] && topAttackList[0].name
+    ? ruleLabel(topAttackList[0].name)
+    : "暂无明显攻击";
+  const topAttackCount = Number((topAttackList[0] && topAttackList[0].count) || 0);
+
+  if (blocked > 0) {
+    return {
+      headline: `近 24 小时累计拦截 ${formatCount(blocked)} 次异常请求`,
+      copy: `当前总请求 ${formatCount(total)} 次，独立来源 IP ${formatCount(uniqueIps)} 个。最活跃的攻击类型为 ${topAttack}，共命中 ${formatCount(topAttackCount)} 次。`,
+    };
+  }
+
+  if (total > 0) {
+    return {
+      headline: `近 24 小时已处理 ${formatCount(total)} 次访问流量`,
+      copy: `当前暂无明确拦截峰值，但已记录 ${formatCount(uniqueIps)} 个来源 IP。建议继续观察登录接口、参数访问和上传入口。`,
+    };
+  }
+
+  return {
+    headline: "当前整体态势稳定",
+    copy: "尚未采集到足够流量数据，可以先访问被保护站点或模拟攻击来生成展示样本。",
+  };
+}
+
+function fillCommonMetrics(overview, options = {}) {
+  const prefix = options.prefix || "";
+  setText(`${prefix}metric-total`, formatCount(overview.total_requests || 0));
+  setText(`${prefix}metric-blocked`, formatCount(overview.blocked_requests || 0));
+  setText(`${prefix}metric-ips`, formatCount(overview.unique_ips || 0));
+  setText(`${prefix}metric-alert-high`, formatCount(overview.high_risk_alerts || 0));
+
+  if (!prefix) {
+    setText("metric-manual-blocks", formatCount(overview.blocked_ip_count || 0));
+    setText("metric-alert-total", formatCount(overview.total_alerts || 0));
+    setText("metric-alert-pending", formatCount(overview.pending_alerts || 0));
+    setText("metric-alert-resolved", formatCount(overview.resolved_alerts || 0));
+    setText("metric-bruteforce", formatCount(overview.brute_force_events || 0));
+    setText("metric-webshell", formatCount(overview.webshell_upload_events || 0));
+    setText("metric-cve", formatCount(overview.cve_alert_events || 0));
+    setText("map-total", formatCount(overview.total_requests || 0));
+    setText("map-rate", `${overview.blocked_rate || 0}%`);
+  }
+
+  if (prefix === "screen-") {
+    setText("screen-metric-blocked-ips", formatCount(overview.blocked_ip_count || 0));
+    setText("screen-metric-alert-pending", formatCount(overview.pending_alerts || 0));
+    setText("screen-metric-alert-resolved", formatCount(overview.resolved_alerts || 0));
+    setText("screen-metric-bruteforce", formatCount(overview.brute_force_events || 0));
+    setText("screen-metric-webshell", formatCount(overview.webshell_upload_events || 0));
+    setText("screen-block-rate", `${overview.blocked_rate || 0}%`);
+
+    const total = Number(overview.total_requests || 0);
+    const passRate = total ? Math.max(0, 100 - Number(overview.blocked_rate || 0)).toFixed(1) : "0.0";
+    setText("screen-pass-rate", `${passRate}%`);
+  }
+}
+
+function renderRankList(containerId, items, emptyText, options = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    return;
+  }
+
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
+    return;
+  }
+
+  const itemClass = container.classList.contains("screen-rank-list") ? "screen-rank-item" : "rank-item";
+  const valueClass = container.classList.contains("screen-rank-list") ? "screen-count-pill" : "count-pill";
+  const labelFormatter = options.labelFormatter || ((item) => item.name);
+  const valueFormatter = options.valueFormatter || ((item) => item.count);
+
+  container.innerHTML = items
+    .map(
+      (item, index) => `
+        <div class="${itemClass}">
+          <div>
+            <span class="rank-order">${String(index + 1).padStart(2, "0")}</span>
+            <strong>${escapeHtml(labelFormatter(item))}</strong>
+          </div>
+          <span class="${valueClass}">${escapeHtml(valueFormatter(item))}</span>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderHighRiskAlerts(items) {
+  const container = document.getElementById("high-risk-alerts");
+  if (!container) {
+    return;
+  }
+
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-state">最近 24 小时没有高危事件</div>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <div class="alert-item high">
+          <div>
+            <strong>${escapeHtml(
+              item.cve_id ? `${ruleLabel(item.attack_type)} · ${item.cve_id}` : ruleLabel(item.attack_type)
+            )}</strong>
+            <div class="muted-text">${escapeHtml(item.client_ip)} · ${escapeHtml(item.path)}</div>
+            <div class="muted-text">${escapeHtml(formatTime(item.created_at))}</div>
+          </div>
+          <span class="status-pill alert ${escapeHtml(item.alert_status || "pending")}">
+            ${escapeHtml(alertStatusLabel(item.alert_status))}
+          </span>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderBlockedIps(items) {
+  const container = document.getElementById("blocked-ips");
+  if (!container) {
+    return;
+  }
+
+  if (!items.length) {
+    container.innerHTML = `<div class="empty-state">当前没有手动封禁的 IP</div>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <div class="blocked-item">
+          <div>
+            <strong>${escapeHtml(item.ip)}</strong>
+            <div class="muted-text">${escapeHtml(item.reason || "手动封禁")}</div>
+            <div class="muted-text">${escapeHtml(formatTime(item.created_at))}</div>
+          </div>
+          <button class="small-button" type="button" data-unblock="${escapeHtml(item.id)}">解封</button>
+        </div>
+      `
+    )
+    .join("");
+
+  container.querySelectorAll("button[data-unblock]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = button.getAttribute("data-unblock");
+      await fetchJson(`/api/blocked-ips/${id}`, { method: "DELETE" });
+      await refreshDashboard();
+    });
+  });
+}
+
+function renderLogs(items) {
+  const body = document.getElementById("logs-body");
+  if (!body) {
+    return;
+  }
+
+  if (!items.length) {
+    body.innerHTML = `<tr><td colspan="11"><div class="empty-state">暂无日志</div></td></tr>`;
+    return;
+  }
+
+  body.innerHTML = items
+    .map((item) => {
+      const reason = item.attack_type
+        ? `${ruleLabel(item.attack_type)}${item.cve_id ? ` · ${item.cve_id}` : ""}${item.attack_detail ? ` / ${item.attack_detail}` : ""}`
+        : "-";
+      const alertStatus = item.alert_status || "not_applicable";
+      const severityClass = item.severity || "low";
+      const upstreamStatus = item.upstream_status || item.status_code || "-";
+
+      const buttons = [
+        `<button class="small-button detail" type="button" data-detail-id="${escapeHtml(item.id)}">详情</button>`,
+        `<button class="small-button neutral" type="button" data-ip="${escapeHtml(item.client_ip)}">封禁</button>`,
+      ];
+
+      if (alertStatus !== "not_applicable") {
+        const nextStatus = alertStatus === "resolved" ? "pending" : "resolved";
+        buttons.push(`
+          <button class="small-button status ${escapeHtml(alertStatus === "resolved" ? "resolved" : "pending")}"
+            type="button"
+            data-status-id="${escapeHtml(item.id)}"
+            data-next-status="${escapeHtml(nextStatus)}">
+            ${escapeHtml(alertStatus === "resolved" ? "改回待处理" : "标记已处置")}
+          </button>
+        `);
+      }
+
+      return `
+        <tr class="${severityClass === "high" ? "log-row-high" : ""}">
+          <td>${escapeHtml(formatTime(item.created_at))}</td>
+          <td><code>${escapeHtml(item.client_ip)}</code></td>
+          <td>${escapeHtml(item.method)}</td>
+          <td><code title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</code></td>
+          <td><span class="status-pill ${escapeHtml(item.action || "allowed")}">${escapeHtml(actionLabel(item.action))}</span></td>
+          <td><span class="status-pill severity ${escapeHtml(severityClass)}">${escapeHtml(severityLabel(item.severity))}</span></td>
+          <td><span class="status-pill alert ${escapeHtml(alertStatus)}">${escapeHtml(alertStatusLabel(alertStatus))}</span></td>
+          <td><code title="${escapeHtml(reason)}">${escapeHtml(reason)}</code></td>
+          <td>${escapeHtml(upstreamStatus)}</td>
+          <td>${escapeHtml(item.duration_ms || 0)} ms</td>
+          <td><div class="row-actions">${buttons.join("")}</div></td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  body.querySelectorAll("button[data-ip]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const ip = button.getAttribute("data-ip");
+      const reason = window.prompt(`请输入封禁 ${ip} 的原因`, "手动封禁");
+      if (reason === null) {
+        return;
+      }
+      await blockIp(ip, reason || "手动封禁");
+    });
+  });
+
+  body.querySelectorAll("button[data-detail-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await openLogDetail(button.getAttribute("data-detail-id"));
+    });
+  });
+
+  body.querySelectorAll("button[data-status-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await updateLogStatus(
+        button.getAttribute("data-status-id"),
+        button.getAttribute("data-next-status")
+      );
+    });
+  });
+}
+
+function renderLogsPagination(payload) {
+  const summary = document.getElementById("logs-pagination-summary");
+  const container = document.getElementById("logs-pagination");
+  if (!summary || !container) {
+    return;
+  }
+
+  const total = Number(payload.total || 0);
+  const page = Number(payload.page || 1);
+  const pageSize = Number(payload.page_size || LOGS_PAGE_SIZE);
+  const totalPages = Number(payload.total_pages || 0);
+
+  if (!total) {
+    summary.textContent = "暂无告警日志";
+    container.innerHTML = "";
+    return;
+  }
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  summary.textContent = `显示第 ${start}-${end} 条，共 ${total} 条，当前第 ${page}/${Math.max(totalPages, 1)} 页`;
+
+  const pageNumbers = [];
+  const windowSize = 5;
+  const startPage = Math.max(1, page - 2);
+  const endPage = Math.min(totalPages, startPage + windowSize - 1);
+  const adjustedStart = Math.max(1, endPage - windowSize + 1);
+  for (let value = adjustedStart; value <= endPage; value += 1) {
+    pageNumbers.push(value);
+  }
+
+  const buttons = [];
+  buttons.push(`
+    <button class="pagination-button" type="button" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>
+      上一页
+    </button>
+  `);
+
+  pageNumbers.forEach((value) => {
+    buttons.push(`
+      <button class="pagination-button ${value === page ? "active" : ""}" type="button" data-page="${value}">
+        ${value}
+      </button>
+    `);
+  });
+
+  buttons.push(`
+    <button class="pagination-button" type="button" data-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>
+      下一页
+    </button>
+  `);
+
+  container.innerHTML = buttons.join("");
+  container.querySelectorAll("button[data-page]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const nextPage = Number(button.getAttribute("data-page") || "1");
+      if (!nextPage || nextPage === currentLogsPage) {
+        return;
+      }
+      currentLogsPage = nextPage;
+      await refreshLogsPage();
+    });
+  });
+}
+
+async function blockIp(ip, reason) {
+  await fetchJson("/api/blocked-ips", {
+    method: "POST",
+    body: JSON.stringify({ ip, reason }),
+  });
+
+  if (document.body.dataset.page === "dashboard") {
+    await refreshDashboard();
+  } else if (document.body.dataset.page === "logs") {
+    await refreshLogsPage();
+  }
+}
+
+async function updateLogStatus(logId, alertStatus) {
+  await fetchJson(`/api/logs/${logId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ alert_status: alertStatus }),
+  });
+  await refreshLogsPage();
+}
+
+async function openLogDetail(logId) {
+  const detail = await fetchJson(`/api/logs/${logId}`);
+
+  setText("detail-created-at", formatTime(detail.created_at));
+  setText("detail-client-ip", detail.client_ip || "-");
+  setText("detail-ip-location", (detail.ip_geo && detail.ip_geo.label) || "未知位置");
+  setText("detail-ip-isp", (detail.ip_geo && detail.ip_geo.isp) || "-");
+  setText("detail-action", actionLabel(detail.action));
+  setText("detail-severity", severityLabel(detail.severity));
+  setText("detail-alert-status", alertStatusLabel(detail.alert_status));
+  setText("detail-cve", detail.cve_id || "-");
+  setText(
+    "detail-request-line",
+    `${detail.method || "-"} ${detail.path || "/"}${detail.query_string ? `?${detail.query_string}` : ""}`
+  );
+  setText("detail-query", detail.query_string || "无查询参数");
+  setText("detail-headers", formatHeaders(detail.request_headers));
+  setText("detail-payload", detail.body_preview || "无 payload 预览");
+  setText(
+    "detail-rule",
+    detail.attack_type
+      ? `${ruleLabel(detail.attack_type)}${detail.cve_id ? ` · ${detail.cve_id}` : ""}${detail.attack_detail ? `\n${detail.attack_detail}` : ""}`
+      : "无命中规则"
+  );
+
+  const backdrop = document.getElementById("log-detail-backdrop");
+  if (backdrop) {
+    backdrop.removeAttribute("hidden");
+  }
+  const drawer = document.getElementById("log-detail-drawer");
+  if (drawer) {
+    drawer.classList.add("open");
+    drawer.setAttribute("aria-hidden", "false");
+  }
+}
+
+function closeLogDetail() {
+  const backdrop = document.getElementById("log-detail-backdrop");
+  if (backdrop) {
+    backdrop.setAttribute("hidden", "hidden");
+  }
+  const drawer = document.getElementById("log-detail-drawer");
+  if (drawer) {
+    drawer.classList.remove("open");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+}
+
+function renderScreenRegions(geoBuckets) {
+  Object.values(SCREEN_REGION_IDS).forEach((id) => setText(id, "0"));
+  (geoBuckets || []).forEach((item) => {
+    const targetId = SCREEN_REGION_IDS[item.name];
+    if (targetId) {
+      setText(targetId, formatCount(item.count || 0));
+    }
+  });
+}
+
+function renderScreenTrend(items) {
+  const container = document.getElementById("screen-trend");
+  if (!container) {
+    return;
+  }
+
+  if (!items || !items.length) {
+    container.innerHTML = `<div class="empty-state">暂无趋势数据</div>`;
+    return;
+  }
+
+  const maxTotal = Math.max(...items.map((item) => Number(item.total || 0)), 1);
+  const maxBlocked = Math.max(...items.map((item) => Number(item.blocked || 0)), 1);
+  const maxHigh = Math.max(...items.map((item) => Number(item.high || 0)), 1);
+
+  container.innerHTML = items
+    .map((item) => {
+      const totalHeight = Math.max(10, Math.round((Number(item.total || 0) / maxTotal) * 100));
+      const blockedHeight = Math.max(8, Math.round((Number(item.blocked || 0) / maxBlocked) * 100));
+      const highHeight = Math.max(6, Math.round((Number(item.high || 0) / maxHigh) * 100));
+      return `
+        <div class="screen-trend-column">
+          <div class="screen-trend-stack">
+            <span class="screen-trend-bar total" style="height:${totalHeight}%"></span>
+            <span class="screen-trend-bar blocked" style="height:${blockedHeight}%"></span>
+            <span class="screen-trend-bar high" style="height:${highHeight}%"></span>
+          </div>
+          <strong>${escapeHtml(item.total || 0)}</strong>
+          <span>${escapeHtml(item.label)}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderScreenAlertFeed(items) {
+  const container = document.getElementById("screen-alert-feed");
+  if (!container) {
+    return;
+  }
+
+  if (!items || !items.length) {
+    container.innerHTML = `<div class="empty-state">最近暂无需要关注的告警</div>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <div class="screen-alert-item ${escapeHtml(item.severity || "medium")}">
+          <div class="screen-alert-main">
+            <div class="screen-alert-topline">
+              <strong>${escapeHtml(item.cve_id || ruleLabel(item.attack_type))}</strong>
+              <span class="status-pill alert ${escapeHtml(item.alert_status || "pending")}">
+                ${escapeHtml(alertStatusLabel(item.alert_status))}
+              </span>
+            </div>
+            <p>${escapeHtml(item.path || "/")}</p>
+            <div class="screen-alert-meta">
+              <span>${escapeHtml(item.client_ip)}</span>
+              <span>${escapeHtml(formatTime(item.created_at))}</span>
+            </div>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderScreenCveFeed(items) {
+  const container = document.getElementById("screen-cve-feed");
+  if (!container) {
+    return;
+  }
+
+  if (!items || !items.length) {
+    container.innerHTML = `<div class="empty-state">最近暂无 CVE 利用告警</div>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <div class="screen-chip">
+          <span>${escapeHtml(item.name)}</span>
+          <strong>${escapeHtml(item.count)}</strong>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderDashboardSummary(overview) {
+  const narrative = buildAnalysisNarrative(overview);
+  setText("analysis-headline", narrative.headline);
+  setText("analysis-copy", narrative.copy);
+}
+
+function renderScreenSummary(overview) {
+  const narrative = buildAnalysisNarrative(overview);
+  setText("screen-headline", narrative.headline);
+  setText("screen-copy", narrative.copy);
+}
+
+function buildLogsUrl() {
+  const params = new URLSearchParams();
+  const actionNode = document.getElementById("log-action");
+  const severityNode = document.getElementById("log-severity");
+  const alertStatusNode = document.getElementById("log-alert-status");
+  const keywordNode = document.getElementById("log-keyword");
+  const action = (actionNode && actionNode.value) || "";
+  const severity = (severityNode && severityNode.value) || "";
+  const alertStatus = (alertStatusNode && alertStatusNode.value) || "";
+  const keyword = (keywordNode && keywordNode.value.trim()) || "";
+  params.set("page", String(currentLogsPage));
+  params.set("page_size", String(LOGS_PAGE_SIZE));
+
+  if (action) {
+    params.set("action", action);
+  }
+  if (severity) {
+    params.set("severity", severity);
+  }
+  if (alertStatus) {
+    params.set("alert_status", alertStatus);
+  }
+  if (keyword) {
+    params.set("keyword", keyword);
+  }
+
+  return `/api/logs?${params.toString()}`;
+}
+
+async function refreshDashboard() {
+  const [runtime, overview, blockedIps] = await Promise.all([
+    fetchJson("/api/runtime"),
+    fetchJson("/api/overview"),
+    fetchJson("/api/blocked-ips"),
+  ]);
+
+  setText("runtime-user", runtime.username || "admin");
+  fillCommonMetrics(overview);
+  renderDashboardSummary(overview);
+  renderHighRiskAlerts(overview.latest_high_risk_alerts || []);
+  renderRankList("attack-types", overview.top_attack_types || [], "最近 24 小时没有拦截记录", {
+    labelFormatter: (item) => ruleLabel(item.name),
+    valueFormatter: (item) => formatCount(item.count || 0),
+  });
+  renderRankList("source-ips", overview.top_source_ips || [], "最近 24 小时没有访问记录", {
+    valueFormatter: (item) => formatCount(item.count || 0),
+  });
+  renderRankList("top-paths", overview.top_paths || [], "最近 24 小时没有路径数据", {
+    valueFormatter: (item) => formatCount(item.count || 0),
+  });
+  renderBlockedIps(blockedIps.items || []);
+}
+
+async function refreshLogsPage() {
+  const [runtime, overview, logs] = await Promise.all([
+    fetchJson("/api/runtime"),
+    fetchJson("/api/overview"),
+    fetchJson(buildLogsUrl()),
+  ]);
+
+  if (logs.total_pages && currentLogsPage > logs.total_pages) {
+    currentLogsPage = logs.total_pages;
+    return refreshLogsPage();
+  }
+
+  setText("runtime-user", runtime.username || "admin");
+  fillCommonMetrics(overview);
+  renderLogs(logs.items || []);
+  renderLogsPagination(logs);
+}
+
+async function refreshScreenPage() {
+  const [runtime, overview] = await Promise.all([
+    fetchJson("/api/runtime"),
+    fetchJson("/api/overview"),
+  ]);
+
+  setText("runtime-user", runtime.username || "admin");
+  fillCommonMetrics(overview, { prefix: "screen-" });
+  renderScreenSummary(overview);
+  renderScreenRegions(overview.geo_buckets || []);
+  renderScreenTrend(overview.hourly_trend || []);
+  renderScreenAlertFeed(overview.recent_alert_stream || []);
+  renderScreenCveFeed(overview.top_cve_ids || []);
+  renderRankList("screen-attack-types", overview.top_attack_types || [], "最近暂无攻击类型数据", {
+    labelFormatter: (item) => ruleLabel(item.name),
+    valueFormatter: (item) => formatCount(item.count || 0),
+  });
+  renderRankList("screen-source-ips", overview.top_source_ips || [], "最近暂无源 IP 数据", {
+    valueFormatter: (item) => formatCount(item.count || 0),
+  });
+  renderRankList("screen-paths", overview.top_paths || [], "最近暂无路径数据", {
+    valueFormatter: (item) => formatCount(item.count || 0),
+  });
+}
+
+function setupLoginForm() {
+  const form = document.getElementById("login-form");
+  if (!form) {
+    return;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorNode = document.getElementById("login-error");
+    errorNode.hidden = true;
+
+    const formData = new FormData(form);
+    try {
+      await fetchJson("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: formData.get("username"),
+          password: formData.get("password"),
+        }),
+      });
+      window.location.href = "/dashboard";
+    } catch (error) {
+      errorNode.textContent = error.message;
+      errorNode.hidden = false;
+    }
+  });
+}
+
+function setupAuthenticatedPage() {
+  const logoutButton = document.getElementById("logout-button");
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await fetchJson("/api/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+  }
+}
+
+function setupDashboard() {
+  setupAuthenticatedPage();
+
+  const blockForm = document.getElementById("block-form");
+  if (blockForm) {
+    blockForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const ip = document.getElementById("block-ip").value.trim();
+      const reason = document.getElementById("block-reason").value.trim();
+      if (!ip) {
+        return;
+      }
+      await blockIp(ip, reason || "手动封禁");
+      blockForm.reset();
+    });
+  }
+
+  refreshDashboard().catch((error) => {
+    window.alert(`加载总览数据失败：${error.message}`);
+  });
+
+  window.setInterval(() => {
+    refreshDashboard().catch(() => {});
+  }, 20000);
+}
+
+function setupLogsPage() {
+  setupAuthenticatedPage();
+  currentLogsPage = 1;
+
+  const filterForm = document.getElementById("log-filter-form");
+  if (filterForm) {
+    filterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      currentLogsPage = 1;
+      await refreshLogsPage();
+    });
+  }
+
+  const detailClose = document.getElementById("log-detail-close");
+  if (detailClose) {
+    detailClose.addEventListener("click", closeLogDetail);
+  }
+  const detailBackdrop = document.getElementById("log-detail-backdrop");
+  if (detailBackdrop) {
+    detailBackdrop.addEventListener("click", closeLogDetail);
+  }
+
+  refreshLogsPage().catch((error) => {
+    window.alert(`加载日志数据失败：${error.message}`);
+  });
+
+  window.setInterval(() => {
+    refreshLogsPage().catch(() => {});
+  }, 20000);
+}
+
+function setupScreenClock() {
+  const updateClock = () => {
+    const now = new Date();
+    const text = now.toLocaleString("zh-CN", { hour12: false });
+    setText("screen-time", text);
+  };
+  updateClock();
+  window.setInterval(updateClock, 1000);
+}
+
+function setupScreenPage() {
+  setupAuthenticatedPage();
+  setupScreenClock();
+
+  refreshScreenPage().catch((error) => {
+    window.alert(`加载态势大屏失败：${error.message}`);
+  });
+
+  window.setInterval(() => {
+    refreshScreenPage().catch(() => {});
+  }, 15000);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setupLoginForm();
+
+  if (document.body.dataset.page === "dashboard") {
+    setupDashboard();
+  }
+
+  if (document.body.dataset.page === "logs") {
+    setupLogsPage();
+  }
+
+  if (isScreenPage()) {
+    setupScreenPage();
+  }
+});

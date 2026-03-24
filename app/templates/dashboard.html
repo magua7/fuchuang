@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} - 控制台总览</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+  </head>
+  <body class="dashboard-page" data-page="dashboard">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">MAGUALINE</span>
+        <h1>威胁流量运营总览</h1>
+      </div>
+      <div class="topbar-actions">
+        <nav class="nav-tabs">
+          <a href="/dashboard" class="nav-tab {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
+          <a href="/screen" class="nav-tab {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
+          <a href="/logs" class="nav-tab {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
+        </nav>
+        <span id="runtime-user" class="muted-text">admin</span>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </div>
+    </header>
+
+    <main class="dashboard-shell">
+      <section class="metrics-grid">
+        <article class="metric-card">
+          <span class="metric-label">24h 总请求</span>
+          <strong id="metric-total">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">24h 拦截次数</span>
+          <strong id="metric-blocked">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">24h 独立源 IP</span>
+          <strong id="metric-ips">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">当前封禁 IP</span>
+          <strong id="metric-manual-blocks">0</strong>
+        </article>
+      </section>
+
+      <section class="alert-metrics-grid">
+        <article class="metric-card metric-card-alert">
+          <span class="metric-label">24h 告警总数</span>
+          <strong id="metric-alert-total">0</strong>
+        </article>
+        <article class="metric-card metric-card-alert high">
+          <span class="metric-label">24h 高危告警</span>
+          <strong id="metric-alert-high">0</strong>
+        </article>
+        <article class="metric-card metric-card-alert pending">
+          <span class="metric-label">待处理</span>
+          <strong id="metric-alert-pending">0</strong>
+        </article>
+        <article class="metric-card metric-card-alert resolved">
+          <span class="metric-label">已处置</span>
+          <strong id="metric-alert-resolved">0</strong>
+        </article>
+      </section>
+
+      <section class="dashboard-overview-grid">
+        <article class="panel panel-summary">
+          <div class="panel-header">
+            <div>
+              <h2>运营态势摘要</h2>
+              <span class="panel-subtitle">围绕流量代理、攻击拦截、日志留痕与处置闭环</span>
+            </div>
+          </div>
+
+          <div class="summary-hero">
+            <div>
+              <span class="map-kicker">AUTO ANALYSIS</span>
+              <strong id="analysis-headline">当前整体态势稳定</strong>
+              <p id="analysis-copy" class="summary-copy">
+                近 24 小时暂无明显攻击峰值，建议持续关注入口流量和高危规则命中情况。
+              </p>
+            </div>
+            <div class="summary-stat-pair">
+              <div class="summary-stat-card">
+                <span>24h 请求总量</span>
+                <strong id="map-total">0</strong>
+              </div>
+              <div class="summary-stat-card">
+                <span>拦截占比</span>
+                <strong id="map-rate">0%</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="threat-focus-grid">
+            <div class="threat-focus-card">
+              <span>暴力破解</span>
+              <strong id="metric-bruteforce">0</strong>
+              <p>统计登录接口短时失败聚集和重复尝试来源。</p>
+            </div>
+            <div class="threat-focus-card">
+              <span>WebShell 上传</span>
+              <strong id="metric-webshell">0</strong>
+              <p>识别危险脚本扩展名与可执行内容特征。</p>
+            </div>
+            <div class="threat-focus-card">
+              <span>CVE 告警</span>
+              <strong id="metric-cve">0</strong>
+              <p>显示 Web 漏洞利用指纹和对应 CVE 编号。</p>
+            </div>
+          </div>
+
+          <div class="quick-link-grid">
+            <a class="quick-link-card" href="/screen">
+              <span>态势感知大屏</span>
+              <strong>进入比赛展示页，查看更完整的可视化大屏。</strong>
+            </a>
+            <a class="quick-link-card" href="/logs">
+              <span>日志中心</span>
+              <strong>按 IP、路径、规则、状态查看攻击和告警详情。</strong>
+            </a>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>高危事件</h2>
+              <span class="panel-subtitle">单独高亮展示，便于优先处置</span>
+            </div>
+          </div>
+          <div id="high-risk-alerts" class="alert-list"></div>
+        </article>
+      </section>
+
+      <section class="content-grid content-grid-triple">
+        <article class="panel">
+          <div class="panel-header">
+            <h2>攻击类型排行</h2>
+            <span class="panel-subtitle">最近 24 小时命中情况</span>
+          </div>
+          <div id="attack-types" class="rank-list"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <h2>活跃源 IP 排行</h2>
+            <span class="panel-subtitle">重点观察高频访问来源</span>
+          </div>
+          <div id="source-ips" class="rank-list"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <h2>访问路径排行</h2>
+            <span class="panel-subtitle">最近 24 小时热点访问入口</span>
+          </div>
+          <div id="top-paths" class="rank-list"></div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel panel-wide">
+          <div class="panel-header">
+            <h2>IP 封禁</h2>
+            <span class="panel-subtitle">手动加入黑名单，适合处置持续扫描或恶意来源</span>
+          </div>
+
+          <form id="block-form" class="stack block-form">
+            <label class="field">
+              <span>IP 地址</span>
+              <input id="block-ip" type="text" placeholder="例如 203.0.113.10" required />
+            </label>
+            <label class="field">
+              <span>封禁原因</span>
+              <input id="block-reason" type="text" placeholder="例如 持续扫描、暴力破解或人工处置" />
+            </label>
+            <button class="primary-button" type="submit">加入封禁列表</button>
+          </form>
+
+          <div id="blocked-ips" class="blocked-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+  </body>
+</html>
