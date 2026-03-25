@@ -92,10 +92,24 @@
             </form>
           </div>
 
+          <div class="bulk-action-bar">
+            <label class="bulk-select-all">
+              <input id="logs-select-all" type="checkbox" />
+              <span>全选本页</span>
+            </label>
+            <div class="bulk-action-meta">
+              <span id="logs-selected-summary">已选 0 条告警</span>
+              <button id="bulk-block-button" class="primary-button bulk-block-button" type="button" disabled>
+                一键封禁已选 IP
+              </button>
+            </div>
+          </div>
+
           <div class="table-shell">
             <table>
               <thead>
                 <tr>
+                  <th class="checkbox-column">选择</th>
                   <th>时间</th>
                   <th>源 IP</th>
                   <th>方法</th>

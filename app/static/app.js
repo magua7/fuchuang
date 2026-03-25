@@ -97,6 +97,7 @@ const SCREEN_REGION_IDS = {
 
 const LOGS_PAGE_SIZE = 20;
 let currentLogsPage = 1;
+const selectedLogEntries = new Map();
 
 function actionLabel(value) {
   return ACTION_LABELS[value] || value || "-";
@@ -290,7 +291,8 @@ function renderLogs(items) {
   }
 
   if (!items.length) {
-    body.innerHTML = `<tr><td colspan="11"><div class="empty-state">暂无日志</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="12"><div class="empty-state">暂无日志</div></td></tr>`;
+    syncLogsSelectionUi([]);
     return;
   }
 
@@ -322,6 +324,15 @@ function renderLogs(items) {
 
       return `
         <tr class="${severityClass === "high" ? "log-row-high" : ""}">
+          <td class="checkbox-column">
+            <input
+              class="log-select-checkbox"
+              type="checkbox"
+              data-log-id="${escapeHtml(item.id)}"
+              data-ip="${escapeHtml(item.client_ip)}"
+              ${selectedLogEntries.has(String(item.id)) ? "checked" : ""}
+            />
+          </td>
           <td>${escapeHtml(formatTime(item.created_at))}</td>
           <td><code>${escapeHtml(item.client_ip)}</code></td>
           <td>${escapeHtml(item.method)}</td>
@@ -363,6 +374,52 @@ function renderLogs(items) {
       );
     });
   });
+
+  body.querySelectorAll(".log-select-checkbox").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const logId = checkbox.getAttribute("data-log-id");
+      const ip = checkbox.getAttribute("data-ip") || "";
+      if (!logId) {
+        return;
+      }
+      if (checkbox.checked) {
+        selectedLogEntries.set(logId, ip);
+      } else {
+        selectedLogEntries.delete(logId);
+      }
+      syncLogsSelectionUi(items);
+    });
+  });
+
+  syncLogsSelectionUi(items);
+}
+
+function syncLogsSelectionUi(items) {
+  const selectAll = document.getElementById("logs-select-all");
+  const summary = document.getElementById("logs-selected-summary");
+  const bulkButton = document.getElementById("bulk-block-button");
+  if (!selectAll || !summary || !bulkButton) {
+    return;
+  }
+
+  const pageIds = items.map((item) => String(item.id));
+  Array.from(selectedLogEntries.keys()).forEach((id) => {
+    if (!pageIds.includes(String(id))) {
+      selectedLogEntries.delete(id);
+    }
+  });
+  const selectedCount = pageIds.filter((id) => selectedLogEntries.has(id)).length;
+  const uniqueIps = new Set(
+    pageIds
+      .filter((id) => selectedLogEntries.has(id))
+      .map((id) => selectedLogEntries.get(id))
+      .filter(Boolean)
+  );
+
+  selectAll.checked = items.length > 0 && selectedCount === items.length;
+  selectAll.indeterminate = selectedCount > 0 && selectedCount < items.length;
+  summary.textContent = `已选 ${selectedCount} 条告警，涉及 ${uniqueIps.size} 个 IP`;
+  bulkButton.disabled = uniqueIps.size === 0;
 }
 
 function renderLogsPagination(payload) {
@@ -424,6 +481,7 @@ function renderLogsPagination(payload) {
       if (!nextPage || nextPage === currentLogsPage) {
         return;
       }
+      selectedLogEntries.clear();
       currentLogsPage = nextPage;
       await refreshLogsPage();
     });
@@ -441,6 +499,31 @@ async function blockIp(ip, reason) {
   } else if (document.body.dataset.page === "logs") {
     await refreshLogsPage();
   }
+}
+
+async function bulkBlockSelectedLogs() {
+  const selectedIps = Array.from(new Set(Array.from(selectedLogEntries.values()).filter(Boolean)));
+  if (!selectedIps.length) {
+    return;
+  }
+
+  const reason = window.prompt(
+    `将批量封禁 ${selectedIps.length} 个 IP，请输入统一封禁原因`,
+    "批量处置告警来源"
+  );
+  if (reason === null) {
+    return;
+  }
+
+  for (const ip of selectedIps) {
+    await fetchJson("/api/blocked-ips", {
+      method: "POST",
+      body: JSON.stringify({ ip, reason: reason || "批量处置告警来源" }),
+    });
+  }
+
+  selectedLogEntries.clear();
+  await refreshLogsPage();
 }
 
 async function updateLogStatus(logId, alertStatus) {
@@ -781,8 +864,39 @@ function setupLogsPage() {
   if (filterForm) {
     filterForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      selectedLogEntries.clear();
       currentLogsPage = 1;
       await refreshLogsPage();
+    });
+  }
+
+  const selectAll = document.getElementById("logs-select-all");
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      document.querySelectorAll(".log-select-checkbox").forEach((checkbox) => {
+        const logId = checkbox.getAttribute("data-log-id");
+        const ip = checkbox.getAttribute("data-ip") || "";
+        checkbox.checked = selectAll.checked;
+        if (!logId) {
+          return;
+        }
+        if (selectAll.checked) {
+          selectedLogEntries.set(logId, ip);
+        } else {
+          selectedLogEntries.delete(logId);
+        }
+      });
+      const pageItems = Array.from(document.querySelectorAll(".log-select-checkbox")).map((checkbox) => ({
+        id: checkbox.getAttribute("data-log-id") || "",
+      }));
+      syncLogsSelectionUi(pageItems);
+    });
+  }
+
+  const bulkBlockButton = document.getElementById("bulk-block-button");
+  if (bulkBlockButton) {
+    bulkBlockButton.addEventListener("click", async () => {
+      await bulkBlockSelectedLogs();
     });
   }
 
