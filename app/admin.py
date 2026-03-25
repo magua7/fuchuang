@@ -139,6 +139,7 @@ async def overview(request: Request):
 @app.get("/api/logs")
 async def logs(
     request: Request,
+    alerts_only: bool = False,
     action: str | None = None,
     keyword: str | None = None,
     severity: str | None = None,
@@ -152,6 +153,7 @@ async def logs(
     return list_logs(
         page=page,
         page_size=page_size,
+        alerts_only=alerts_only,
         action=action or None,
         keyword=keyword or None,
         severity=severity or None,

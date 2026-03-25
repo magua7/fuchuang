@@ -209,6 +209,7 @@ def list_logs(
     *,
     page: int = 1,
     page_size: int = 20,
+    alerts_only: bool = False,
     action: str | None = None,
     keyword: str | None = None,
     severity: str | None = None,
@@ -219,6 +220,9 @@ def list_logs(
     """
     clauses = []
     params: list[object] = []
+
+    if alerts_only:
+        clauses.append("alert_status IN ('pending', 'resolved')")
 
     if action:
         clauses.append("action = ?")

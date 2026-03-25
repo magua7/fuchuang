@@ -97,6 +97,7 @@ const SCREEN_REGION_IDS = {
 
 const LOGS_PAGE_SIZE = 20;
 let currentLogsPage = 1;
+let currentAlertView = "all";
 const selectedLogEntries = new Map();
 
 function actionLabel(value) {
@@ -488,6 +489,35 @@ function renderLogsPagination(payload) {
   });
 }
 
+function renderAlertViewTabs(overview) {
+  setText("alert-view-total", formatCount(overview.total_alerts || 0));
+  setText("alert-view-pending", formatCount(overview.pending_alerts || 0));
+  setText("alert-view-resolved", formatCount(overview.resolved_alerts || 0));
+
+  document.querySelectorAll(".alert-view-tab").forEach((button) => {
+    const view = button.getAttribute("data-alert-view") || "all";
+    button.classList.toggle("active", view === currentAlertView);
+  });
+}
+
+function applyAlertView(view) {
+  currentAlertView = view;
+
+  const statusSelect = document.getElementById("log-alert-status");
+  if (statusSelect) {
+    statusSelect.value = view === "all" ? "" : view;
+  }
+
+  const totalNode = document.getElementById("metric-alert-total");
+  const pendingNode = document.getElementById("metric-alert-pending");
+  const resolvedNode = document.getElementById("metric-alert-resolved");
+  renderAlertViewTabs({
+    total_alerts: (totalNode && totalNode.textContent) || "0",
+    pending_alerts: (pendingNode && pendingNode.textContent) || "0",
+    resolved_alerts: (resolvedNode && resolvedNode.textContent) || "0",
+  });
+}
+
 async function blockIp(ip, reason) {
   await fetchJson("/api/blocked-ips", {
     method: "POST",
@@ -708,6 +738,7 @@ function buildLogsUrl() {
   const keyword = (keywordNode && keywordNode.value.trim()) || "";
   params.set("page", String(currentLogsPage));
   params.set("page_size", String(LOGS_PAGE_SIZE));
+  params.set("alerts_only", "true");
 
   if (action) {
     params.set("action", action);
@@ -715,7 +746,9 @@ function buildLogsUrl() {
   if (severity) {
     params.set("severity", severity);
   }
-  if (alertStatus) {
+  if (currentAlertView === "pending" || currentAlertView === "resolved") {
+    params.set("alert_status", currentAlertView);
+  } else if (alertStatus) {
     params.set("alert_status", alertStatus);
   }
   if (keyword) {
@@ -763,6 +796,7 @@ async function refreshLogsPage() {
 
   setText("runtime-user", runtime.username || "admin");
   fillCommonMetrics(overview);
+  renderAlertViewTabs(overview);
   renderLogs(logs.items || []);
   renderLogsPagination(logs);
 }
@@ -859,11 +893,36 @@ function setupDashboard() {
 function setupLogsPage() {
   setupAuthenticatedPage();
   currentLogsPage = 1;
+  currentAlertView = "all";
 
   const filterForm = document.getElementById("log-filter-form");
   if (filterForm) {
     filterForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      selectedLogEntries.clear();
+      currentLogsPage = 1;
+      await refreshLogsPage();
+    });
+  }
+
+  document.querySelectorAll(".alert-view-tab").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const view = button.getAttribute("data-alert-view") || "all";
+      if (view === currentAlertView) {
+        return;
+      }
+      selectedLogEntries.clear();
+      currentLogsPage = 1;
+      applyAlertView(view);
+      await refreshLogsPage();
+    });
+  });
+
+  const statusSelect = document.getElementById("log-alert-status");
+  if (statusSelect) {
+    statusSelect.addEventListener("change", async () => {
+      const value = statusSelect.value || "";
+      currentAlertView = value === "pending" || value === "resolved" ? value : "all";
       selectedLogEntries.clear();
       currentLogsPage = 1;
       await refreshLogsPage();
