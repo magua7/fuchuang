@@ -78,8 +78,26 @@ const SEVERITY_LABELS = {
 };
 
 const ALERT_STATUS_LABELS = {
-  pending: "待处理",
-  resolved: "已处置",
+  real_attack: "真实攻击行为",
+  customer_business: "客户业务行为",
+  pending_business: "待确认业务行为",
+  notified_event: "已通报事件告警",
+  pending: "待确认业务行为",
+  resolved: "已通报事件告警",
+  resolved_event: "已通报事件告警",
+  not_applicable: "-",
+};
+
+const ALERT_STATUS_KEYS = [
+  "real_attack",
+  "customer_business",
+  "pending_business",
+  "notified_event",
+];
+
+const HANDLED_STATUS_LABELS = {
+  handled: "已处理告警",
+  unhandled: "未处理告警",
   not_applicable: "-",
 };
 
@@ -98,6 +116,7 @@ const SCREEN_REGION_IDS = {
 const LOGS_PAGE_SIZE = 20;
 let currentLogsPage = 1;
 let currentAlertView = "all";
+let currentHandledView = "all";
 const selectedLogEntries = new Map();
 
 function actionLabel(value) {
@@ -112,8 +131,23 @@ function severityLabel(value) {
   return SEVERITY_LABELS[value] || value || "-";
 }
 
+function normalizeAlertStatus(value) {
+  if (value === "pending") {
+    return "pending_business";
+  }
+  if (value === "resolved" || value === "resolved_event") {
+    return "notified_event";
+  }
+  return value || "not_applicable";
+}
+
 function alertStatusLabel(value) {
-  return ALERT_STATUS_LABELS[value] || value || "-";
+  const normalized = normalizeAlertStatus(value);
+  return ALERT_STATUS_LABELS[normalized] || normalized || "-";
+}
+
+function handledStatusLabel(value) {
+  return HANDLED_STATUS_LABELS[value] || value || "-";
 }
 
 function formatHeaders(headers) {
@@ -165,6 +199,8 @@ function fillCommonMetrics(overview, options = {}) {
   if (!prefix) {
     setText("metric-manual-blocks", formatCount(overview.blocked_ip_count || 0));
     setText("metric-alert-total", formatCount(overview.total_alerts || 0));
+    setText("metric-alert-unhandled", formatCount(overview.unhandled_alerts || 0));
+    setText("metric-alert-handled", formatCount(overview.handled_alerts || 0));
     setText("metric-alert-pending", formatCount(overview.pending_alerts || 0));
     setText("metric-alert-resolved", formatCount(overview.resolved_alerts || 0));
     setText("metric-bruteforce", formatCount(overview.brute_force_events || 0));
@@ -232,7 +268,9 @@ function renderHighRiskAlerts(items) {
 
   container.innerHTML = items
     .map(
-      (item) => `
+      (item) => {
+        const alertStatus = normalizeAlertStatus(item.alert_status);
+        return `
         <div class="alert-item high">
           <div>
             <strong>${escapeHtml(
@@ -241,11 +279,12 @@ function renderHighRiskAlerts(items) {
             <div class="muted-text">${escapeHtml(item.client_ip)} · ${escapeHtml(item.path)}</div>
             <div class="muted-text">${escapeHtml(formatTime(item.created_at))}</div>
           </div>
-          <span class="status-pill alert ${escapeHtml(item.alert_status || "pending")}">
-            ${escapeHtml(alertStatusLabel(item.alert_status))}
+          <span class="status-pill alert ${escapeHtml(alertStatus)}">
+            ${escapeHtml(alertStatusLabel(alertStatus))}
           </span>
         </div>
-      `
+      `;
+      }
     )
     .join("");
 }
@@ -285,6 +324,49 @@ function renderBlockedIps(items) {
   });
 }
 
+function renderLogDispositionControl(logId, alertStatus) {
+  if (alertStatus === "not_applicable") {
+    return "";
+  }
+
+  const options = ALERT_STATUS_KEYS
+    .map(
+      (value) => `
+        <option value="${escapeHtml(value)}" ${value === alertStatus ? "selected" : ""}>
+          ${escapeHtml(alertStatusLabel(value))}
+        </option>
+      `
+    )
+    .join("");
+
+  return `
+    <label class="status-select-wrap ${escapeHtml(alertStatus)}">
+      <span class="status-select-label">处置分类</span>
+      <div class="status-select-inline">
+        <select class="status-select ${escapeHtml(alertStatus)}" data-status-select-id="${escapeHtml(logId)}">
+          ${options}
+        </select>
+        <button class="small-button disposition" type="button" data-status-id="${escapeHtml(logId)}">处置</button>
+      </div>
+    </label>
+  `;
+}
+
+function getSelectedDisposition(logId) {
+  const select = document.querySelector(`select[data-status-select-id="${logId}"]`);
+  return select ? select.value : "";
+}
+
+function renderHandledStatusBadge(handledStatus) {
+  const normalized = handledStatus || "not_applicable";
+  return `<span class="status-pill handled ${escapeHtml(normalized)}">${escapeHtml(handledStatusLabel(normalized))}</span>`;
+}
+
+function renderAlertCategoryBadge(alertStatus) {
+  const normalized = normalizeAlertStatus(alertStatus);
+  return `<span class="status-pill alert ${escapeHtml(normalized)}">${escapeHtml(alertStatusLabel(normalized))}</span>`;
+}
+
 function renderLogs(items) {
   const body = document.getElementById("logs-body");
   if (!body) {
@@ -292,7 +374,7 @@ function renderLogs(items) {
   }
 
   if (!items.length) {
-    body.innerHTML = `<tr><td colspan="12"><div class="empty-state">暂无日志</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="13"><div class="empty-state">暂无日志</div></td></tr>`;
     syncLogsSelectionUi([]);
     return;
   }
@@ -302,7 +384,8 @@ function renderLogs(items) {
       const reason = item.attack_type
         ? `${ruleLabel(item.attack_type)}${item.cve_id ? ` · ${item.cve_id}` : ""}${item.attack_detail ? ` / ${item.attack_detail}` : ""}`
         : "-";
-      const alertStatus = item.alert_status || "not_applicable";
+      const alertStatus = normalizeAlertStatus(item.alert_status);
+      const handledStatus = item.handled_status || "not_applicable";
       const severityClass = item.severity || "low";
       const upstreamStatus = item.upstream_status || item.status_code || "-";
 
@@ -312,19 +395,11 @@ function renderLogs(items) {
       ];
 
       if (alertStatus !== "not_applicable") {
-        const nextStatus = alertStatus === "resolved" ? "pending" : "resolved";
-        buttons.push(`
-          <button class="small-button status ${escapeHtml(alertStatus === "resolved" ? "resolved" : "pending")}"
-            type="button"
-            data-status-id="${escapeHtml(item.id)}"
-            data-next-status="${escapeHtml(nextStatus)}">
-            ${escapeHtml(alertStatus === "resolved" ? "改回待处理" : "标记已处置")}
-          </button>
-        `);
+        buttons.push(renderLogDispositionControl(item.id, alertStatus));
       }
 
       return `
-        <tr class="${severityClass === "high" ? "log-row-high" : ""}">
+        <tr class="${severityClass === "high" ? "log-row-high" : ""} ${alertStatus !== "not_applicable" ? `log-row-${alertStatus}` : ""}">
           <td class="checkbox-column">
             <input
               class="log-select-checkbox"
@@ -340,7 +415,8 @@ function renderLogs(items) {
           <td><code title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</code></td>
           <td><span class="status-pill ${escapeHtml(item.action || "allowed")}">${escapeHtml(actionLabel(item.action))}</span></td>
           <td><span class="status-pill severity ${escapeHtml(severityClass)}">${escapeHtml(severityLabel(item.severity))}</span></td>
-          <td><span class="status-pill alert ${escapeHtml(alertStatus)}">${escapeHtml(alertStatusLabel(alertStatus))}</span></td>
+          <td>${renderHandledStatusBadge(handledStatus)}</td>
+          <td>${renderAlertCategoryBadge(alertStatus)}</td>
           <td><code title="${escapeHtml(reason)}">${escapeHtml(reason)}</code></td>
           <td>${escapeHtml(upstreamStatus)}</td>
           <td>${escapeHtml(item.duration_ms || 0)} ms</td>
@@ -369,10 +445,12 @@ function renderLogs(items) {
 
   body.querySelectorAll("button[data-status-id]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await updateLogStatus(
-        button.getAttribute("data-status-id"),
-        button.getAttribute("data-next-status")
-      );
+      const logId = button.getAttribute("data-status-id");
+      const alertStatus = getSelectedDisposition(logId);
+      if (!alertStatus) {
+        return;
+      }
+      await updateLogStatus(logId, alertStatus);
     });
   });
 
@@ -399,7 +477,8 @@ function syncLogsSelectionUi(items) {
   const selectAll = document.getElementById("logs-select-all");
   const summary = document.getElementById("logs-selected-summary");
   const bulkButton = document.getElementById("bulk-block-button");
-  if (!selectAll || !summary || !bulkButton) {
+  const bulkDispositionButton = document.getElementById("bulk-disposition-button");
+  if (!selectAll || !summary || !bulkButton || !bulkDispositionButton) {
     return;
   }
 
@@ -421,6 +500,7 @@ function syncLogsSelectionUi(items) {
   selectAll.indeterminate = selectedCount > 0 && selectedCount < items.length;
   summary.textContent = `已选 ${selectedCount} 条告警，涉及 ${uniqueIps.size} 个 IP`;
   bulkButton.disabled = uniqueIps.size === 0;
+  bulkDispositionButton.disabled = selectedCount === 0;
 }
 
 function renderLogsPagination(payload) {
@@ -491,12 +571,25 @@ function renderLogsPagination(payload) {
 
 function renderAlertViewTabs(overview) {
   setText("alert-view-total", formatCount(overview.total_alerts || 0));
-  setText("alert-view-pending", formatCount(overview.pending_alerts || 0));
-  setText("alert-view-resolved", formatCount(overview.resolved_alerts || 0));
+  setText("alert-view-real-attack", formatCount(overview.real_attack_alerts || 0));
+  setText("alert-view-customer-business", formatCount(overview.customer_business_alerts || 0));
+  setText("alert-view-pending-business", formatCount(overview.pending_business_alerts || 0));
+  setText("alert-view-notified-event", formatCount(overview.notified_event_alerts || overview.resolved_event_alerts || 0));
 
   document.querySelectorAll(".alert-view-tab").forEach((button) => {
     const view = button.getAttribute("data-alert-view") || "all";
     button.classList.toggle("active", view === currentAlertView);
+  });
+}
+
+function renderHandledViewTabs(overview) {
+  setText("handled-view-total", formatCount(overview.total_alerts || 0));
+  setText("handled-view-unhandled", formatCount(overview.unhandled_alerts || 0));
+  setText("handled-view-handled", formatCount(overview.handled_alerts || 0));
+
+  document.querySelectorAll(".alert-process-tab").forEach((button) => {
+    const view = button.getAttribute("data-handled-view") || "all";
+    button.classList.toggle("active", view === currentHandledView);
   });
 }
 
@@ -509,12 +602,29 @@ function applyAlertView(view) {
   }
 
   const totalNode = document.getElementById("metric-alert-total");
-  const pendingNode = document.getElementById("metric-alert-pending");
-  const resolvedNode = document.getElementById("metric-alert-resolved");
+  const realAttackNode = document.getElementById("alert-view-real-attack");
+  const customerBusinessNode = document.getElementById("alert-view-customer-business");
+  const pendingBusinessNode = document.getElementById("alert-view-pending-business");
+  const notifiedEventNode = document.getElementById("alert-view-notified-event");
   renderAlertViewTabs({
     total_alerts: (totalNode && totalNode.textContent) || "0",
-    pending_alerts: (pendingNode && pendingNode.textContent) || "0",
-    resolved_alerts: (resolvedNode && resolvedNode.textContent) || "0",
+    real_attack_alerts: (realAttackNode && realAttackNode.textContent) || "0",
+    customer_business_alerts: (customerBusinessNode && customerBusinessNode.textContent) || "0",
+    pending_business_alerts: (pendingBusinessNode && pendingBusinessNode.textContent) || "0",
+    notified_event_alerts: (notifiedEventNode && notifiedEventNode.textContent) || "0",
+  });
+}
+
+function applyHandledView(view) {
+  currentHandledView = view;
+
+  const totalNode = document.getElementById("metric-alert-total");
+  const unhandledNode = document.getElementById("metric-alert-unhandled");
+  const handledNode = document.getElementById("metric-alert-handled");
+  renderHandledViewTabs({
+    total_alerts: (totalNode && totalNode.textContent) || "0",
+    unhandled_alerts: (unhandledNode && unhandledNode.textContent) || "0",
+    handled_alerts: (handledNode && handledNode.textContent) || "0",
   });
 }
 
@@ -556,6 +666,26 @@ async function bulkBlockSelectedLogs() {
   await refreshLogsPage();
 }
 
+async function bulkDispositionSelectedLogs() {
+  const logIds = Array.from(selectedLogEntries.keys()).map((value) => Number(value)).filter(Boolean);
+  const categorySelect = document.getElementById("bulk-disposition-status");
+  const alertStatus = categorySelect ? categorySelect.value : "";
+  if (!logIds.length || !alertStatus) {
+    return;
+  }
+
+  await fetchJson("/api/logs/disposition/bulk", {
+    method: "POST",
+    body: JSON.stringify({
+      log_ids: logIds,
+      alert_status: alertStatus,
+    }),
+  });
+
+  selectedLogEntries.clear();
+  await refreshLogsPage();
+}
+
 async function updateLogStatus(logId, alertStatus) {
   await fetchJson(`/api/logs/${logId}/status`, {
     method: "PATCH",
@@ -573,6 +703,7 @@ async function openLogDetail(logId) {
   setText("detail-ip-isp", (detail.ip_geo && detail.ip_geo.isp) || "-");
   setText("detail-action", actionLabel(detail.action));
   setText("detail-severity", severityLabel(detail.severity));
+  setText("detail-handled-status", handledStatusLabel(detail.handled_status));
   setText("detail-alert-status", alertStatusLabel(detail.alert_status));
   setText("detail-cve", detail.cve_id || "-");
   setText(
@@ -670,13 +801,15 @@ function renderScreenAlertFeed(items) {
 
   container.innerHTML = items
     .map(
-      (item) => `
+      (item) => {
+        const alertStatus = normalizeAlertStatus(item.alert_status);
+        return `
         <div class="screen-alert-item ${escapeHtml(item.severity || "medium")}">
           <div class="screen-alert-main">
             <div class="screen-alert-topline">
               <strong>${escapeHtml(item.cve_id || ruleLabel(item.attack_type))}</strong>
-              <span class="status-pill alert ${escapeHtml(item.alert_status || "pending")}">
-                ${escapeHtml(alertStatusLabel(item.alert_status))}
+              <span class="status-pill alert ${escapeHtml(alertStatus)}">
+                ${escapeHtml(alertStatusLabel(alertStatus))}
               </span>
             </div>
             <p>${escapeHtml(item.path || "/")}</p>
@@ -686,7 +819,8 @@ function renderScreenAlertFeed(items) {
             </div>
           </div>
         </div>
-      `
+      `;
+      }
     )
     .join("");
 }
@@ -740,16 +874,20 @@ function buildLogsUrl() {
   params.set("page_size", String(LOGS_PAGE_SIZE));
   params.set("alerts_only", "true");
 
+  if (currentHandledView === "handled" || currentHandledView === "unhandled") {
+    params.set("handled_status", currentHandledView);
+  }
+
   if (action) {
     params.set("action", action);
   }
   if (severity) {
     params.set("severity", severity);
   }
-  if (currentAlertView === "pending" || currentAlertView === "resolved") {
+  if (ALERT_STATUS_KEYS.includes(currentAlertView)) {
     params.set("alert_status", currentAlertView);
   } else if (alertStatus) {
-    params.set("alert_status", alertStatus);
+    params.set("alert_status", normalizeAlertStatus(alertStatus));
   }
   if (keyword) {
     params.set("keyword", keyword);
@@ -796,6 +934,7 @@ async function refreshLogsPage() {
 
   setText("runtime-user", runtime.username || "admin");
   fillCommonMetrics(overview);
+  renderHandledViewTabs(overview);
   renderAlertViewTabs(overview);
   renderLogs(logs.items || []);
   renderLogsPagination(logs);
@@ -894,6 +1033,7 @@ function setupLogsPage() {
   setupAuthenticatedPage();
   currentLogsPage = 1;
   currentAlertView = "all";
+  currentHandledView = "all";
 
   const filterForm = document.getElementById("log-filter-form");
   if (filterForm) {
@@ -918,11 +1058,24 @@ function setupLogsPage() {
     });
   });
 
+  document.querySelectorAll(".alert-process-tab").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const view = button.getAttribute("data-handled-view") || "all";
+      if (view === currentHandledView) {
+        return;
+      }
+      selectedLogEntries.clear();
+      currentLogsPage = 1;
+      applyHandledView(view);
+      await refreshLogsPage();
+    });
+  });
+
   const statusSelect = document.getElementById("log-alert-status");
   if (statusSelect) {
     statusSelect.addEventListener("change", async () => {
-      const value = statusSelect.value || "";
-      currentAlertView = value === "pending" || value === "resolved" ? value : "all";
+      const value = normalizeAlertStatus(statusSelect.value || "");
+      currentAlertView = ALERT_STATUS_KEYS.includes(value) ? value : "all";
       selectedLogEntries.clear();
       currentLogsPage = 1;
       await refreshLogsPage();
@@ -956,6 +1109,13 @@ function setupLogsPage() {
   if (bulkBlockButton) {
     bulkBlockButton.addEventListener("click", async () => {
       await bulkBlockSelectedLogs();
+    });
+  }
+
+  const bulkDispositionButton = document.getElementById("bulk-disposition-button");
+  if (bulkDispositionButton) {
+    bulkDispositionButton.addEventListener("click", async () => {
+      await bulkDispositionSelectedLogs();
     });
   }
 

@@ -52,14 +52,29 @@
           <span class="metric-label">24h 高危告警</span>
           <strong id="metric-alert-high">0</strong>
         </article>
-        <article class="metric-card metric-card-alert pending">
-          <span class="metric-label">待处理</span>
-          <strong id="metric-alert-pending">0</strong>
+        <article class="metric-card metric-card-alert pending-business">
+          <span class="metric-label">未处理告警</span>
+          <strong id="metric-alert-unhandled">0</strong>
         </article>
-        <article class="metric-card metric-card-alert resolved">
-          <span class="metric-label">已处置</span>
-          <strong id="metric-alert-resolved">0</strong>
+        <article class="metric-card metric-card-alert resolved-event">
+          <span class="metric-label">已处理告警</span>
+          <strong id="metric-alert-handled">0</strong>
         </article>
+      </section>
+
+      <section class="alert-process-tabs">
+        <button class="alert-process-tab active" type="button" data-handled-view="all">
+          <span>全部告警</span>
+          <strong id="handled-view-total">0</strong>
+        </button>
+        <button class="alert-process-tab pending-business" type="button" data-handled-view="unhandled">
+          <span>未处理告警</span>
+          <strong id="handled-view-unhandled">0</strong>
+        </button>
+        <button class="alert-process-tab resolved-event" type="button" data-handled-view="handled">
+          <span>已处理告警</span>
+          <strong id="handled-view-handled">0</strong>
+        </button>
       </section>
 
       <section class="alert-view-tabs">
@@ -67,13 +82,21 @@
           <span>总告警</span>
           <strong id="alert-view-total">0</strong>
         </button>
-        <button class="alert-view-tab" type="button" data-alert-view="pending">
-          <span>未处置告警</span>
-          <strong id="alert-view-pending">0</strong>
+        <button class="alert-view-tab real-attack" type="button" data-alert-view="real_attack">
+          <span>真实攻击行为</span>
+          <strong id="alert-view-real-attack">0</strong>
         </button>
-        <button class="alert-view-tab" type="button" data-alert-view="resolved">
-          <span>已处置告警</span>
-          <strong id="alert-view-resolved">0</strong>
+        <button class="alert-view-tab customer-business" type="button" data-alert-view="customer_business">
+          <span>客户业务行为</span>
+          <strong id="alert-view-customer-business">0</strong>
+        </button>
+        <button class="alert-view-tab pending-business" type="button" data-alert-view="pending_business">
+          <span>待确认业务行为</span>
+          <strong id="alert-view-pending-business">0</strong>
+        </button>
+        <button class="alert-view-tab resolved-event" type="button" data-alert-view="notified_event">
+          <span>已通报事件告警</span>
+          <strong id="alert-view-notified-event">0</strong>
         </button>
       </section>
 
@@ -98,9 +121,11 @@
                 <option value="low">仅低危</option>
               </select>
               <select id="log-alert-status">
-                <option value="">全部状态</option>
-                <option value="pending">待处理</option>
-                <option value="resolved">已处置</option>
+                <option value="">全部分类</option>
+                <option value="real_attack">真实攻击行为</option>
+                <option value="customer_business">客户业务行为</option>
+                <option value="pending_business">待确认业务行为</option>
+                <option value="notified_event">已通报事件告警</option>
               </select>
               <input id="log-keyword" type="search" placeholder="搜 IP / 路径 / 规则 / CVE" />
               <button class="ghost-button" type="submit">筛选</button>
@@ -114,6 +139,15 @@
             </label>
             <div class="bulk-action-meta">
               <span id="logs-selected-summary">已选 0 条告警</span>
+              <select id="bulk-disposition-status" class="bulk-disposition-select">
+                <option value="real_attack">真实攻击行为</option>
+                <option value="customer_business">客户业务行为</option>
+                <option value="pending_business">待确认业务行为</option>
+                <option value="notified_event">已通报事件告警</option>
+              </select>
+              <button id="bulk-disposition-button" class="ghost-button" type="button" disabled>
+                批量处置
+              </button>
               <button id="bulk-block-button" class="primary-button bulk-block-button" type="button" disabled>
                 一键封禁已选 IP
               </button>
@@ -131,9 +165,10 @@
                   <th>路径</th>
                   <th>动作</th>
                   <th>级别</th>
-                  <th>处置</th>
+                  <th>处理状态</th>
+                  <th>事件分类</th>
                   <th>规则</th>
-                  <th>状态</th>
+                  <th>响应码</th>
                   <th>耗时</th>
                   <th>操作</th>
                 </tr>
@@ -150,32 +185,32 @@
 
         <aside class="panel">
           <div class="panel-header">
-            <h2>日志说明</h2>
-            <span class="panel-subtitle">帮助你快速读懂当前页面</span>
+            <h2>分类说明</h2>
+            <span class="panel-subtitle">帮助你快速区分攻击、业务与已处置事件</span>
           </div>
           <div class="rank-list">
             <div class="rank-item">
               <div>
-                <strong>高危</strong>
-                <span class="muted-text">高风险利用、上传、爆破等事件会单独高亮。</span>
+                <strong>真实攻击行为</strong>
+                <span class="muted-text">确认属于漏洞利用、爆破、上传木马等恶意流量，使用红色框高亮。</span>
               </div>
             </div>
             <div class="rank-item">
               <div>
-                <strong>放行</strong>
-                <span class="muted-text">请求正常回源到真实站点，不代表完全无风险。</span>
+                <strong>客户业务行为</strong>
+                <span class="muted-text">命中过规则但确认是客户正常业务流量，使用黄色框标记。</span>
               </div>
             </div>
             <div class="rank-item">
               <div>
-                <strong>拦截</strong>
-                <span class="muted-text">已命中规则或人工封禁来源。</span>
+                <strong>待确认业务行为</strong>
+                <span class="muted-text">当前还无法直接判断真伪，先归入待确认队列，使用黄绿色框展示。</span>
               </div>
             </div>
             <div class="rank-item">
               <div>
-                <strong>错误</strong>
-                <span class="muted-text">WAF 无法正常回源，建议联动检查源站健康。</span>
+                <strong>已通报事件告警</strong>
+                <span class="muted-text">已经完成研判、通报或升级流转的事件，使用蓝色框标识。</span>
               </div>
             </div>
           </div>
@@ -219,7 +254,11 @@
           <strong id="detail-severity">-</strong>
         </div>
         <div class="detail-card">
-          <span class="detail-label">处置状态</span>
+          <span class="detail-label">处理状态</span>
+          <strong id="detail-handled-status">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">事件分类</span>
           <strong id="detail-alert-status">-</strong>
         </div>
         <div class="detail-card">

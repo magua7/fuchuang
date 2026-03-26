@@ -13,6 +13,7 @@ from .config import get_settings
 from .ip_geo import lookup_ip_geo
 from .storage import (
     add_blocked_ip,
+    bulk_update_log_status,
     cache_ip_geo,
     get_cached_ip_geo,
     get_log_detail,
@@ -144,6 +145,7 @@ async def logs(
     keyword: str | None = None,
     severity: str | None = None,
     alert_status: str | None = None,
+    handled_status: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ):
@@ -158,6 +160,7 @@ async def logs(
         keyword=keyword or None,
         severity=severity or None,
         alert_status=alert_status or None,
+        handled_status=handled_status or None,
     )
 
 
@@ -184,10 +187,26 @@ async def patch_log_status(log_id: int, request: Request):
     payload = await request.json()
     alert_status = str(payload.get("alert_status", "")).strip()
 
-    if alert_status not in {"pending", "resolved"}:
+    if alert_status not in {"real_attack", "customer_business", "pending_business", "notified_event"}:
         raise HTTPException(status_code=400, detail="告警状态不合法")
 
     update_log_status(log_id, alert_status)
+    return {"message": "ok"}
+
+
+@app.post("/api/logs/disposition/bulk")
+async def bulk_patch_log_status(request: Request):
+    require_api_auth(request)
+    payload = await request.json()
+    alert_status = str(payload.get("alert_status", "")).strip()
+    log_ids = payload.get("log_ids", [])
+
+    if alert_status not in {"real_attack", "customer_business", "pending_business", "notified_event"}:
+        raise HTTPException(status_code=400, detail="告警状态不合法")
+    if not isinstance(log_ids, list) or not log_ids:
+        raise HTTPException(status_code=400, detail="请选择需要处置的告警")
+
+    bulk_update_log_status(log_ids, alert_status)
     return {"message": "ok"}
 
 

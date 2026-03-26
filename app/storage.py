@@ -23,6 +23,14 @@ REGION_BUCKET_RULES = {
 SCREEN_BUCKET_ORDER = ("华北", "华东", "华南", "华中", "西部", "东北", "本地", "海外", "未知")
 
 
+ALERT_STATUS_ACTIVE = (
+    "real_attack",
+    "customer_business",
+    "pending_business",
+    "notified_event",
+)
+
+
 def utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -50,13 +58,13 @@ def classify_log(action: str, attack_type: str | None) -> tuple[str, str]:
         return "low", "not_applicable"
 
     if action == "error":
-        return "medium", "pending"
+        return "medium", "pending_business"
 
     if attack_type in high_rules:
-        return "high", "pending"
+        return "high", "real_attack"
 
     if attack_type in medium_rules or action == "blocked":
-        return "medium", "pending"
+        return "medium", "pending_business"
 
     return "low", "not_applicable"
 
@@ -127,6 +135,7 @@ def init_db() -> None:
         )
         ensure_column(connection, "request_logs", "severity", "severity TEXT")
         ensure_column(connection, "request_logs", "alert_status", "alert_status TEXT")
+        ensure_column(connection, "request_logs", "handled_status", "handled_status TEXT")
         ensure_column(connection, "request_logs", "status_updated_at", "status_updated_at TEXT")
         ensure_column(connection, "request_logs", "cve_id", "cve_id TEXT")
         ensure_column(connection, "request_logs", "request_headers", "request_headers TEXT")
@@ -142,12 +151,29 @@ def init_db() -> None:
                     ELSE 'low'
                 END
             ),
-            alert_status = COALESCE(alert_status,
-                CASE
-                    WHEN action IN ('blocked', 'error') THEN 'pending'
-                    ELSE 'not_applicable'
-                END
-            ),
+            alert_status = CASE
+                WHEN alert_status = 'pending' THEN
+                    CASE
+                        WHEN attack_type IN ('webshell_upload', 'brute_force', 'command_injection', 'sql_injection', 'cve_exploit_attempt') THEN 'real_attack'
+                        WHEN action IN ('blocked', 'error') THEN 'pending_business'
+                        ELSE 'not_applicable'
+                    END
+                WHEN alert_status IN ('resolved', 'resolved_event') THEN 'notified_event'
+                WHEN alert_status IN ('real_attack', 'customer_business', 'pending_business', 'notified_event', 'not_applicable') THEN alert_status
+                WHEN alert_status IS NULL THEN
+                    CASE
+                        WHEN attack_type IN ('webshell_upload', 'brute_force', 'command_injection', 'sql_injection', 'cve_exploit_attempt') THEN 'real_attack'
+                        WHEN action IN ('blocked', 'error') THEN 'pending_business'
+                        ELSE 'not_applicable'
+                    END
+                ELSE alert_status
+            END,
+            handled_status = CASE
+                WHEN handled_status IN ('handled', 'unhandled', 'not_applicable') THEN handled_status
+                WHEN alert_status IN ('resolved', 'resolved_event', 'notified_event') THEN 'handled'
+                WHEN action IN ('blocked', 'error') THEN 'unhandled'
+                ELSE 'not_applicable'
+            END,
             status_updated_at = COALESCE(status_updated_at, created_at)
             """
         )
@@ -172,14 +198,15 @@ def add_log(
     body_preview: str | None,
 ) -> None:
     severity, alert_status = classify_log(action, attack_type)
+    handled_status = "unhandled" if action in {"blocked", "error"} else "not_applicable"
     with closing(get_connection()) as connection:
         connection.execute(
             """
             INSERT INTO request_logs (
                 created_at, client_ip, method, path, query_string, user_agent,
-                request_headers, action, attack_type, attack_detail, cve_id, severity, alert_status, status_updated_at,
+                request_headers, action, attack_type, attack_detail, cve_id, severity, alert_status, handled_status, status_updated_at,
                 status_code, upstream_status, duration_ms, body_preview
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 utcnow_iso(),
@@ -195,6 +222,7 @@ def add_log(
                 cve_id,
                 severity,
                 alert_status,
+                handled_status,
                 utcnow_iso(),
                 status_code,
                 upstream_status,
@@ -214,6 +242,7 @@ def list_logs(
     keyword: str | None = None,
     severity: str | None = None,
     alert_status: str | None = None,
+    handled_status: str | None = None,
 ) -> dict:
     base_sql = """
         FROM request_logs
@@ -222,7 +251,9 @@ def list_logs(
     params: list[object] = []
 
     if alerts_only:
-        clauses.append("alert_status IN ('pending', 'resolved')")
+        placeholders = ", ".join("?" for _ in ALERT_STATUS_ACTIVE)
+        clauses.append(f"alert_status IN ({placeholders})")
+        params.extend(ALERT_STATUS_ACTIVE)
 
     if action:
         clauses.append("action = ?")
@@ -241,6 +272,10 @@ def list_logs(
         clauses.append("alert_status = ?")
         params.append(alert_status)
 
+    if handled_status:
+        clauses.append("handled_status = ?")
+        params.append(handled_status)
+
     where_sql = ""
     if clauses:
         where_sql = " WHERE " + " AND ".join(clauses)
@@ -252,7 +287,7 @@ def list_logs(
     total_sql = "SELECT COUNT(*) AS total " + base_sql + where_sql
     data_sql = """
         SELECT id, created_at, client_ip, method, path, query_string, user_agent,
-               action, attack_type, attack_detail, cve_id, severity, alert_status,
+               action, attack_type, attack_detail, cve_id, severity, alert_status, handled_status,
                status_code, upstream_status, duration_ms, body_preview
     """ + base_sql + where_sql + " ORDER BY id DESC LIMIT ? OFFSET ?"
 
@@ -276,7 +311,7 @@ def get_log_detail(log_id: int) -> dict | None:
             """
             SELECT id, created_at, client_ip, method, path, query_string, user_agent,
                    request_headers, action, attack_type, attack_detail, cve_id,
-                   severity, alert_status, status_updated_at, status_code,
+                   severity, alert_status, handled_status, status_updated_at, status_code,
                    upstream_status, duration_ms, body_preview
             FROM request_logs
             WHERE id = ?
@@ -421,10 +456,14 @@ def get_overview(hours: int = 24) -> dict:
         alert_totals = connection.execute(
             """
             SELECT
-                SUM(CASE WHEN action IN ('blocked', 'error') THEN 1 ELSE 0 END) AS total_alerts,
+                SUM(CASE WHEN alert_status IN ('real_attack', 'customer_business', 'pending_business', 'notified_event') THEN 1 ELSE 0 END) AS total_alerts,
                 SUM(CASE WHEN severity = 'high' THEN 1 ELSE 0 END) AS high_risk_alerts,
-                SUM(CASE WHEN alert_status = 'pending' THEN 1 ELSE 0 END) AS pending_alerts,
-                SUM(CASE WHEN alert_status = 'resolved' THEN 1 ELSE 0 END) AS resolved_alerts
+                SUM(CASE WHEN alert_status = 'real_attack' THEN 1 ELSE 0 END) AS real_attack_alerts,
+                SUM(CASE WHEN alert_status = 'customer_business' THEN 1 ELSE 0 END) AS customer_business_alerts,
+                SUM(CASE WHEN alert_status = 'pending_business' THEN 1 ELSE 0 END) AS pending_business_alerts,
+                SUM(CASE WHEN alert_status = 'notified_event' THEN 1 ELSE 0 END) AS notified_event_alerts,
+                SUM(CASE WHEN handled_status = 'unhandled' THEN 1 ELSE 0 END) AS unhandled_alerts,
+                SUM(CASE WHEN handled_status = 'handled' THEN 1 ELSE 0 END) AS handled_alerts
             FROM request_logs
             WHERE created_at >= ?
             """,
@@ -551,8 +590,15 @@ def get_overview(hours: int = 24) -> dict:
         "blocked_ip_count": blocked_ip_count,
         "total_alerts": alert_totals["total_alerts"] or 0,
         "high_risk_alerts": alert_totals["high_risk_alerts"] or 0,
-        "pending_alerts": alert_totals["pending_alerts"] or 0,
-        "resolved_alerts": alert_totals["resolved_alerts"] or 0,
+        "real_attack_alerts": alert_totals["real_attack_alerts"] or 0,
+        "customer_business_alerts": alert_totals["customer_business_alerts"] or 0,
+        "pending_business_alerts": alert_totals["pending_business_alerts"] or 0,
+        "notified_event_alerts": alert_totals["notified_event_alerts"] or 0,
+        "resolved_event_alerts": alert_totals["notified_event_alerts"] or 0,
+        "unhandled_alerts": alert_totals["unhandled_alerts"] or 0,
+        "handled_alerts": alert_totals["handled_alerts"] or 0,
+        "pending_alerts": alert_totals["unhandled_alerts"] or 0,
+        "resolved_alerts": alert_totals["handled_alerts"] or 0,
         "brute_force_events": brute_force_events or 0,
         "webshell_upload_events": webshell_upload_events or 0,
         "cve_alert_events": cve_alert_events or 0,
@@ -637,10 +683,28 @@ def update_log_status(log_id: int, alert_status: str) -> None:
         connection.execute(
             """
             UPDATE request_logs
-            SET alert_status = ?, status_updated_at = ?
+            SET alert_status = ?, handled_status = 'handled', status_updated_at = ?
             WHERE id = ?
             """,
             (alert_status, utcnow_iso(), log_id),
+        )
+        connection.commit()
+
+
+def bulk_update_log_status(log_ids: list[int], alert_status: str) -> None:
+    clean_ids = [int(log_id) for log_id in log_ids if str(log_id).strip()]
+    if not clean_ids:
+        return
+
+    placeholders = ", ".join("?" for _ in clean_ids)
+    with closing(get_connection()) as connection:
+        connection.execute(
+            f"""
+            UPDATE request_logs
+            SET alert_status = ?, handled_status = 'handled', status_updated_at = ?
+            WHERE id IN ({placeholders})
+            """,
+            (alert_status, utcnow_iso(), *clean_ids),
         )
         connection.commit()
 

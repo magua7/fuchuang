@@ -494,6 +494,22 @@ body.auth-page {
   color: #b91c1c;
 }
 
+.metric-card-alert.real-attack strong {
+  color: #b91c1c;
+}
+
+.metric-card-alert.customer-business strong {
+  color: #a16207;
+}
+
+.metric-card-alert.pending-business strong {
+  color: #4d7c0f;
+}
+
+.metric-card-alert.resolved-event strong {
+  color: #1d4ed8;
+}
+
 .metric-card-alert.pending strong {
   color: #b45309;
 }
@@ -804,18 +820,72 @@ body.auth-page {
   color: #1d4ed8;
 }
 
-.status-pill.alert.pending {
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
+.status-pill.alert.real_attack {
+  background: rgba(254, 226, 226, 0.96);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.34);
 }
 
+.status-pill.alert.customer_business {
+  background: rgba(254, 249, 195, 0.96);
+  color: #a16207;
+  border: 1px solid rgba(202, 138, 4, 0.34);
+}
+
+.status-pill.alert.pending_business,
+.status-pill.alert.pending {
+  background: rgba(236, 252, 203, 0.96);
+  color: #4d7c0f;
+  border: 1px solid rgba(101, 163, 13, 0.34);
+}
+
+.status-pill.alert.notified_event,
+.status-pill.alert.resolved_event,
 .status-pill.alert.resolved {
-  background: rgba(15, 118, 110, 0.14);
-  color: #0f766e;
+  background: rgba(219, 234, 254, 0.96);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.32);
+}
+
+.status-pill.handled.unhandled {
+  background: rgba(254, 243, 199, 0.96);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.status-pill.handled.handled {
+  background: rgba(219, 234, 254, 0.96);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.28);
 }
 
 .log-row-high {
   background: linear-gradient(90deg, rgba(254, 242, 242, 0.92), rgba(255, 255, 255, 0.86));
+}
+
+.log-row-real_attack td:first-child,
+.log-row-customer_business td:first-child,
+.log-row-pending_business td:first-child,
+.log-row-notified_event td:first-child,
+.log-row-resolved_event td:first-child {
+  border-left: 4px solid transparent;
+}
+
+.log-row-real_attack td:first-child {
+  border-left-color: rgba(220, 38, 38, 0.68);
+}
+
+.log-row-customer_business td:first-child {
+  border-left-color: rgba(202, 138, 4, 0.68);
+}
+
+.log-row-pending_business td:first-child {
+  border-left-color: rgba(101, 163, 13, 0.68);
+}
+
+.log-row-notified_event td:first-child,
+.log-row-resolved_event td:first-child {
+  border-left-color: rgba(37, 99, 235, 0.68);
 }
 
 .row-actions {
@@ -862,13 +932,80 @@ body.auth-page {
   flex-wrap: wrap;
 }
 
+.bulk-disposition-select {
+  min-height: 40px;
+  min-width: 180px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+
 .bulk-block-button {
   min-width: 160px;
 }
 
+.alert-process-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.alert-process-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(191, 219, 254, 0.5);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.alert-process-tab span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.alert-process-tab strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.alert-process-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.38);
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.1);
+}
+
+.alert-process-tab.active {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(37, 99, 235, 0.82));
+  border-color: rgba(37, 99, 235, 0.66);
+  color: #fff;
+}
+
+.alert-process-tab.active span {
+  color: rgba(219, 234, 254, 0.9);
+}
+
+.alert-process-tab.pending-business.active {
+  background: linear-gradient(135deg, rgba(180, 83, 9, 0.96), rgba(245, 158, 11, 0.82));
+  border-color: rgba(217, 119, 6, 0.68);
+}
+
+.alert-process-tab.resolved-event.active {
+  background: linear-gradient(135deg, rgba(29, 78, 216, 0.96), rgba(59, 130, 246, 0.82));
+  border-color: rgba(37, 99, 235, 0.68);
+}
+
 .alert-view-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
 }
 
@@ -907,6 +1044,26 @@ body.auth-page {
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(59, 130, 246, 0.78));
   border-color: rgba(37, 99, 235, 0.66);
   color: #fff;
+}
+
+.alert-view-tab.real-attack.active {
+  background: linear-gradient(135deg, rgba(185, 28, 28, 0.96), rgba(239, 68, 68, 0.8));
+  border-color: rgba(220, 38, 38, 0.72);
+}
+
+.alert-view-tab.customer-business.active {
+  background: linear-gradient(135deg, rgba(202, 138, 4, 0.96), rgba(250, 204, 21, 0.82));
+  border-color: rgba(202, 138, 4, 0.68);
+}
+
+.alert-view-tab.pending-business.active {
+  background: linear-gradient(135deg, rgba(101, 163, 13, 0.96), rgba(163, 230, 53, 0.82));
+  border-color: rgba(101, 163, 13, 0.68);
+}
+
+.alert-view-tab.resolved-event.active {
+  background: linear-gradient(135deg, rgba(29, 78, 216, 0.96), rgba(59, 130, 246, 0.82));
+  border-color: rgba(37, 99, 235, 0.68);
 }
 
 .alert-view-tab.active span {
@@ -1040,6 +1197,64 @@ td code {
 .small-button.status.resolved {
   background: rgba(245, 158, 11, 0.16);
   color: #b45309;
+}
+
+.status-select-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.status-select-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-select-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-select {
+  min-height: 34px;
+  min-width: 166px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.status-select.real_attack {
+  border-color: rgba(220, 38, 38, 0.4);
+  background: rgba(254, 242, 242, 0.92);
+  color: #b91c1c;
+}
+
+.status-select.customer_business {
+  border-color: rgba(202, 138, 4, 0.4);
+  background: rgba(254, 249, 195, 0.92);
+  color: #a16207;
+}
+
+.status-select.pending_business {
+  border-color: rgba(101, 163, 13, 0.4);
+  background: rgba(236, 252, 203, 0.92);
+  color: #4d7c0f;
+}
+
+.status-select.notified_event,
+.status-select.resolved_event {
+  border-color: rgba(37, 99, 235, 0.36);
+  background: rgba(219, 234, 254, 0.92);
+  color: #1d4ed8;
+}
+
+.small-button.disposition {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
 }
 
 .empty-state {
