@@ -15,6 +15,11 @@ class Settings:
     data_dir: Path
     log_body_limit: int
     request_timeout: int
+    dashscope_api_key: str
+    bailian_app_id: str
+    bailian_workspace_id: str
+    bailian_base_url: str
+    bailian_timeout: int
 
     @property
     def db_path(self) -> Path:
@@ -35,4 +40,9 @@ def get_settings() -> Settings:
         data_dir=data_dir,
         log_body_limit=int(os.getenv("LOG_BODY_LIMIT", "4096")),
         request_timeout=int(os.getenv("REQUEST_TIMEOUT", "30")),
+        dashscope_api_key=os.getenv("DASHSCOPE_API_KEY", "").strip(),
+        bailian_app_id=os.getenv("BAILIAN_APP_ID", "").strip(),
+        bailian_workspace_id=os.getenv("BAILIAN_WORKSPACE_ID", "").strip(),
+        bailian_base_url=os.getenv("BAILIAN_BASE_URL", "https://dashscope.aliyuncs.com").rstrip("/"),
+        bailian_timeout=int(os.getenv("BAILIAN_TIMEOUT", "120")),
     )

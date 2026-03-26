@@ -162,6 +162,51 @@ function formatHeaders(headers) {
     .join("\n");
 }
 
+function formatAiLogDisplay(display) {
+  if (!display || typeof display !== "object") {
+    return "AI 未返回结构化结果";
+  }
+
+  const lines = [];
+  if (display.title) {
+    lines.push(`结论：${display.title}`);
+  }
+  if (display.summary) {
+    lines.push(`摘要：${display.summary}`);
+  }
+  if (display.disposition) {
+    lines.push(`事件分类：${alertStatusLabel(display.disposition)}`);
+  }
+  if (display.risk_level) {
+    lines.push(`风险等级：${display.risk_level}`);
+  }
+  if (display.confidence !== undefined && String(display.confidence) !== "") {
+    lines.push(`置信度：${display.confidence}`);
+  }
+
+  const sections = [
+    ["证据", display.evidence],
+    ["不确定点", display.uncertainties],
+    ["建议动作", display.suggested_actions],
+  ];
+  sections.forEach(([name, items]) => {
+    if (Array.isArray(items) && items.length) {
+      lines.push(`${name}：`);
+      items.forEach((item) => lines.push(`- ${item}`));
+    }
+  });
+
+  if (Array.isArray(display.rule_patch_suggestion) && display.rule_patch_suggestion.length) {
+    lines.push("规则补充建议：");
+    display.rule_patch_suggestion.forEach((item, index) => {
+      const text = typeof item === "string" ? item : JSON.stringify(item, null, 2);
+      lines.push(`- 建议 ${index + 1}: ${text}`);
+    });
+  }
+
+  return lines.join("\n") || "AI 未返回可展示结果";
+}
+
 function buildAnalysisNarrative(overview) {
   const total = Number(overview.total_requests || 0);
   const blocked = Number(overview.blocked_requests || 0);
@@ -461,6 +506,7 @@ function renderLogs(items) {
 
       const buttons = [
         `<button class="small-button detail" type="button" data-detail-id="${escapeHtml(item.id)}">详情</button>`,
+        `<button class="small-button neutral" type="button" data-ai-id="${escapeHtml(item.id)}">问AI</button>`,
         `<button class="small-button neutral" type="button" data-ip="${escapeHtml(item.client_ip)}">封禁</button>`,
       ];
 
@@ -508,6 +554,22 @@ function renderLogs(items) {
   body.querySelectorAll("button[data-detail-id]").forEach((button) => {
     button.addEventListener("click", async () => {
       await openLogDetail(button.getAttribute("data-detail-id"));
+    });
+  });
+
+  body.querySelectorAll("button[data-ai-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const logId = button.getAttribute("data-ai-id");
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "AI 分析中";
+      try {
+        await openLogDetail(logId);
+        await analyzeLogWithAi(logId);
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText || "问AI";
+      }
     });
   });
 
@@ -778,6 +840,19 @@ async function bulkDispositionSelectedLogs() {
   await refreshLogsPage();
 }
 
+async function analyzeLogWithAi(logId) {
+  setText("detail-ai-analysis", "AI 正在分析该流量，请稍候...");
+  try {
+    const result = await fetchJson(`/api/agent/log/${logId}/analyze`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    setText("detail-ai-analysis", formatAiLogDisplay(result.display || {}));
+  } catch (error) {
+    setText("detail-ai-analysis", `AI 分析失败：${error.message}`);
+  }
+}
+
 async function updateLogStatus(logId, alertStatus) {
   await fetchJson(`/api/logs/${logId}/status`, {
     method: "PATCH",
@@ -805,6 +880,7 @@ async function openLogDetail(logId) {
   setText("detail-query", detail.query_string || "无查询参数");
   setText("detail-headers", formatHeaders(detail.request_headers));
   setText("detail-payload", detail.body_preview || "无 payload 预览");
+  setText("detail-ai-analysis", "点击日志行中的“问AI”按钮，生成该流量的智能研判。");
   setText(
     "detail-rule",
     detail.attack_type

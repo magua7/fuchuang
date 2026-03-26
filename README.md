@@ -36,3 +36,23 @@ UPSTREAM_URL=http://host.docker.internal:8090
 ```
 
 当前 `docker-compose.yml` 已经把 `host.docker.internal` 映射到了 Linux 宿主机网关地址，所以容器里可以直接回源到宿主机上的 Halo。
+
+## AI 研判接入
+
+如果你希望在 `/logs` 的日志详情里使用 AI 研判，请在 `.env` 里补充下面这些变量：
+
+```env
+DASHSCOPE_API_KEY=
+BAILIAN_APP_ID=
+BAILIAN_WORKSPACE_ID=
+BAILIAN_BASE_URL=https://dashscope.aliyuncs.com
+BAILIAN_TIMEOUT=30
+```
+
+配置完成后重新执行：
+
+```bash
+docker compose up -d --build
+```
+
+随后你可以在“日志中心”里点单条流量右侧的“问AI”按钮，对该条流量做智能研判。
