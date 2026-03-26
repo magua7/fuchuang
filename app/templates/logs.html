@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ app_name }} - 日志中心</title>
+    <title>{{ app_name }} - 流量日志中心</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
   </head>
   <body class="dashboard-page" data-page="logs">
     <header class="topbar">
       <div>
         <span class="eyebrow">MAGUALINE</span>
-        <h1>日志与告警分析</h1>
+        <h1>流量与日志分析</h1>
       </div>
       <div class="topbar-actions">
         <nav class="nav-tabs">
@@ -52,34 +52,26 @@
           <span class="metric-label">24h 高危告警</span>
           <strong id="metric-alert-high">0</strong>
         </article>
-        <article class="metric-card metric-card-alert pending-business">
-          <span class="metric-label">未处理告警</span>
-          <strong id="metric-alert-unhandled">0</strong>
-        </article>
-        <article class="metric-card metric-card-alert resolved-event">
-          <span class="metric-label">已处理告警</span>
-          <strong id="metric-alert-handled">0</strong>
-        </article>
       </section>
 
       <section class="alert-process-tabs">
         <button class="alert-process-tab active" type="button" data-handled-view="all">
-          <span>全部告警</span>
+          <span>全部流量</span>
           <strong id="handled-view-total">0</strong>
         </button>
         <button class="alert-process-tab pending-business" type="button" data-handled-view="unhandled">
-          <span>未处理告警</span>
+          <span>未处理流量</span>
           <strong id="handled-view-unhandled">0</strong>
         </button>
         <button class="alert-process-tab resolved-event" type="button" data-handled-view="handled">
-          <span>已处理告警</span>
+          <span>已处理流量</span>
           <strong id="handled-view-handled">0</strong>
         </button>
       </section>
 
       <section class="alert-view-tabs">
         <button class="alert-view-tab active" type="button" data-alert-view="all">
-          <span>总告警</span>
+          <span>全部流量</span>
           <strong id="alert-view-total">0</strong>
         </button>
         <button class="alert-view-tab real-attack" type="button" data-alert-view="real_attack">
@@ -105,7 +97,7 @@
           <div class="panel-header panel-header-wrap">
             <div>
               <h2>请求与攻击日志</h2>
-              <span class="panel-subtitle">查看流量、拦截、错误与处置动作，支持详情抽屉和筛选</span>
+              <span class="panel-subtitle">全部流量和告警事件统一展示，靠动作、分类、级别和处理状态做筛选，不再拆成两套页面。</span>
             </div>
             <form id="log-filter-form" class="filter-row">
               <select id="log-action">
@@ -138,19 +130,15 @@
               <span>全选本页</span>
             </label>
             <div class="bulk-action-meta">
-              <span id="logs-selected-summary">已选 0 条告警</span>
+              <span id="logs-selected-summary">已选 0 条流量</span>
               <select id="bulk-disposition-status" class="bulk-disposition-select">
                 <option value="real_attack">真实攻击行为</option>
                 <option value="customer_business">客户业务行为</option>
                 <option value="pending_business">待确认业务行为</option>
                 <option value="notified_event">已通报事件告警</option>
               </select>
-              <button id="bulk-disposition-button" class="ghost-button" type="button" disabled>
-                批量处置
-              </button>
-              <button id="bulk-block-button" class="primary-button bulk-block-button" type="button" disabled>
-                一键封禁已选 IP
-              </button>
+              <button id="bulk-disposition-button" class="ghost-button" type="button" disabled>批量处置</button>
+              <button id="bulk-block-button" class="primary-button bulk-block-button" type="button" disabled>一键封禁已选 IP</button>
             </div>
           </div>
 
@@ -186,31 +174,31 @@
         <aside class="panel">
           <div class="panel-header">
             <h2>分类说明</h2>
-            <span class="panel-subtitle">帮助你快速区分攻击、业务与已处置事件</span>
+            <span class="panel-subtitle">帮助你快速区分攻击、业务和已完成通报的事件。</span>
           </div>
           <div class="rank-list">
             <div class="rank-item">
               <div>
                 <strong>真实攻击行为</strong>
-                <span class="muted-text">确认属于漏洞利用、爆破、上传木马等恶意流量，使用红色框高亮。</span>
+                <span class="muted-text">确认属于漏洞利用、暴力破解、恶意扫描、WebShell 上传等攻击行为。</span>
               </div>
             </div>
             <div class="rank-item">
               <div>
                 <strong>客户业务行为</strong>
-                <span class="muted-text">命中过规则但确认是客户正常业务流量，使用黄色框标记。</span>
+                <span class="muted-text">命中过规则，但经研判属于客户的正常业务流量或可接受操作。</span>
               </div>
             </div>
             <div class="rank-item">
               <div>
                 <strong>待确认业务行为</strong>
-                <span class="muted-text">当前还无法直接判断真伪，先归入待确认队列，使用黄绿色框展示。</span>
+                <span class="muted-text">当前还不能直接确定真伪，需要继续观察或和客户确认的事件。</span>
               </div>
             </div>
             <div class="rank-item">
               <div>
                 <strong>已通报事件告警</strong>
-                <span class="muted-text">已经完成研判、通报或升级流转的事件，使用蓝色框标识。</span>
+                <span class="muted-text">已经完成研判、通报、升级或流转的事件，用于追踪处置闭环。</span>
               </div>
             </div>
           </div>
@@ -223,7 +211,7 @@
       <div class="detail-drawer-header">
         <div>
           <span class="eyebrow">DETAIL</span>
-          <h2>告警详情</h2>
+          <h2>流量详情</h2>
         </div>
         <button id="log-detail-close" class="ghost-button" type="button">关闭</button>
       </div>

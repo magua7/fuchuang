@@ -23,7 +23,9 @@ from .storage import (
 
 
 HOP_BY_HOP_HEADERS = {
+    "accept-encoding",
     "connection",
+    "content-encoding",
     "content-length",
     "host",
     "keep-alive",
@@ -75,6 +77,12 @@ def filter_headers(headers: Iterable[tuple[str, str]]) -> dict[str, str]:
             continue
         clean_headers[key] = value
     return clean_headers
+
+
+def resolve_forwarded_port(request: Request) -> str:
+    if request.url.port:
+        return str(request.url.port)
+    return "443" if request.url.scheme == "https" else "80"
 
 
 def serialize_request_headers(headers: Iterable[tuple[str, str]]) -> str:
@@ -242,8 +250,15 @@ async def proxy(request: Request, full_path: str = "") -> Response:
         return blocked_response(reason, detection.rule_name)
 
     headers = filter_headers(request.headers.items())
+    original_host = request.headers.get("host", "")
+    if original_host:
+        headers["host"] = original_host
+        headers["x-forwarded-host"] = original_host
+        headers["x-forwarded-server"] = original_host.split(":", 1)[0]
     headers["x-forwarded-for"] = client_ip
     headers["x-real-ip"] = client_ip
+    headers["x-forwarded-proto"] = request.url.scheme
+    headers["x-forwarded-port"] = resolve_forwarded_port(request)
     upstream_url = build_upstream_url(request, full_path)
 
     try:

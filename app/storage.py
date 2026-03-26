@@ -169,10 +169,9 @@ def init_db() -> None:
                 ELSE alert_status
             END,
             handled_status = CASE
-                WHEN handled_status IN ('handled', 'unhandled', 'not_applicable') THEN handled_status
+                WHEN handled_status IN ('handled', 'unhandled') THEN handled_status
                 WHEN alert_status IN ('resolved', 'resolved_event', 'notified_event') THEN 'handled'
-                WHEN action IN ('blocked', 'error') THEN 'unhandled'
-                ELSE 'not_applicable'
+                ELSE 'unhandled'
             END,
             status_updated_at = COALESCE(status_updated_at, created_at)
             """
@@ -198,7 +197,7 @@ def add_log(
     body_preview: str | None,
 ) -> None:
     severity, alert_status = classify_log(action, attack_type)
-    handled_status = "unhandled" if action in {"blocked", "error"} else "not_applicable"
+    handled_status = "unhandled"
     with closing(get_connection()) as connection:
         connection.execute(
             """

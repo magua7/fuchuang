@@ -9,18 +9,42 @@
   <body class="auth-page">
     <main class="auth-shell">
       <section class="auth-hero">
+        <div class="auth-hero-orbit auth-hero-orbit-a"></div>
+        <div class="auth-hero-orbit auth-hero-orbit-b"></div>
         <span class="eyebrow">MAGUALINE</span>
         <h1>威胁流量防护台</h1>
-        <p>聚焦入口流量、攻击拦截、日志留痕和人工处置，突出态势感知与运营分析视图。</p>
+        <p class="auth-description">
+          聚焦入口流量、攻击拦截、日志留痕与人工处置，保留比赛最需要的安全运营闭环，
+          让风险态势与处置动作都能被快速看清。
+        </p>
+
+        <div class="auth-status-strip">
+          <div class="auth-status-chip">
+            <span>防护模式</span>
+            <strong>入口代理</strong>
+          </div>
+          <div class="auth-status-chip">
+            <span>监测视角</span>
+            <strong>24h / 实时</strong>
+          </div>
+          <div class="auth-status-chip">
+            <span>研判重点</span>
+            <strong>流量与告警</strong>
+          </div>
+        </div>
 
         <div class="hero-map-card">
           <div class="hero-map">
             <div class="hero-map-grid"></div>
+            <div class="hero-map-scan"></div>
             <div class="hero-map-glow"></div>
             <div class="hero-map-contour hero-map-contour-a"></div>
             <div class="hero-map-contour hero-map-contour-b"></div>
             <div class="hero-arc hero-arc-a"></div>
             <div class="hero-arc hero-arc-b"></div>
+            <div class="hero-beacon hero-beacon-a"></div>
+            <div class="hero-beacon hero-beacon-b"></div>
+            <div class="hero-beacon hero-beacon-c"></div>
             <div class="hero-node hero-node-a"><span>华北</span><strong>24</strong></div>
             <div class="hero-node hero-node-b"><span>华东</span><strong>31</strong></div>
             <div class="hero-node hero-node-c"><span>华南</span><strong>12</strong></div>
@@ -52,22 +76,40 @@
         <div class="card-header">
           <span class="badge">管理员</span>
           <h2>登录控制台</h2>
+          <p>请输入您的账号密码以访问管理后台</p>
         </div>
 
         <form id="login-form" class="stack">
           <label class="field">
             <span>用户名</span>
-            <input name="username" type="text" autocomplete="username" required />
+            <input
+              name="username"
+              type="text"
+              autocomplete="username"
+              placeholder="请输入用户名"
+              required
+            />
           </label>
 
           <label class="field">
             <span>密码</span>
-            <input name="password" type="password" autocomplete="current-password" required />
+            <input
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+              required
+            />
           </label>
 
           <button class="primary-button" type="submit">进入后台</button>
           <p id="login-error" class="form-error" hidden></p>
         </form>
+
+        <div class="auth-footer">
+          <p class="auth-footer-line">© 2026 MAGUALINE 威胁流量防护台</p>
+          <p class="auth-footer-line">版本 1.0.0</p>
+        </div>
       </section>
     </main>
 

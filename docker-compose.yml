@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - ${HOST_DATA_DIR:-./data}:/app/data
     ports:
       - "80:8080"
     extra_hosts:
@@ -21,7 +21,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - ${HOST_DATA_DIR:-./data}:/app/data
     ports:
       - "9443:9443"
     depends_on:

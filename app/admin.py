@@ -188,7 +188,7 @@ async def patch_log_status(log_id: int, request: Request):
     alert_status = str(payload.get("alert_status", "")).strip()
 
     if alert_status not in {"real_attack", "customer_business", "pending_business", "notified_event"}:
-        raise HTTPException(status_code=400, detail="告警状态不合法")
+        raise HTTPException(status_code=400, detail="处置分类不合法")
 
     update_log_status(log_id, alert_status)
     return {"message": "ok"}
@@ -202,9 +202,9 @@ async def bulk_patch_log_status(request: Request):
     log_ids = payload.get("log_ids", [])
 
     if alert_status not in {"real_attack", "customer_business", "pending_business", "notified_event"}:
-        raise HTTPException(status_code=400, detail="告警状态不合法")
+        raise HTTPException(status_code=400, detail="处置分类不合法")
     if not isinstance(log_ids, list) or not log_ids:
-        raise HTTPException(status_code=400, detail="请选择需要处置的告警")
+        raise HTTPException(status_code=400, detail="请选择需要处置的流量记录")
 
     bulk_update_log_status(log_ids, alert_status)
     return {"message": "ok"}

@@ -85,7 +85,7 @@ const ALERT_STATUS_LABELS = {
   pending: "待确认业务行为",
   resolved: "已通报事件告警",
   resolved_event: "已通报事件告警",
-  not_applicable: "-",
+  not_applicable: "未分类流量",
 };
 
 const ALERT_STATUS_KEYS = [
@@ -96,9 +96,9 @@ const ALERT_STATUS_KEYS = [
 ];
 
 const HANDLED_STATUS_LABELS = {
-  handled: "已处理告警",
-  unhandled: "未处理告警",
-  not_applicable: "-",
+  handled: "已处理流量",
+  unhandled: "未处理流量",
+  not_applicable: "未处理流量",
 };
 
 const SCREEN_REGION_IDS = {
@@ -117,6 +117,7 @@ const LOGS_PAGE_SIZE = 20;
 let currentLogsPage = 1;
 let currentAlertView = "all";
 let currentHandledView = "all";
+let currentLogsScope = "all";
 const selectedLogEntries = new Map();
 
 function actionLabel(value) {
@@ -325,14 +326,12 @@ function renderBlockedIps(items) {
 }
 
 function renderLogDispositionControl(logId, alertStatus) {
-  if (alertStatus === "not_applicable") {
-    return "";
-  }
+  const currentStatus = alertStatus === "not_applicable" ? "pending_business" : alertStatus;
 
   const options = ALERT_STATUS_KEYS
     .map(
       (value) => `
-        <option value="${escapeHtml(value)}" ${value === alertStatus ? "selected" : ""}>
+        <option value="${escapeHtml(value)}" ${value === currentStatus ? "selected" : ""}>
           ${escapeHtml(alertStatusLabel(value))}
         </option>
       `
@@ -340,10 +339,10 @@ function renderLogDispositionControl(logId, alertStatus) {
     .join("");
 
   return `
-    <label class="status-select-wrap ${escapeHtml(alertStatus)}">
+    <label class="status-select-wrap ${escapeHtml(currentStatus)}">
       <span class="status-select-label">处置分类</span>
       <div class="status-select-inline">
-        <select class="status-select ${escapeHtml(alertStatus)}" data-status-select-id="${escapeHtml(logId)}">
+        <select class="status-select ${escapeHtml(currentStatus)}" data-status-select-id="${escapeHtml(logId)}">
           ${options}
         </select>
         <button class="small-button disposition" type="button" data-status-id="${escapeHtml(logId)}">处置</button>
@@ -358,7 +357,7 @@ function getSelectedDisposition(logId) {
 }
 
 function renderHandledStatusBadge(handledStatus) {
-  const normalized = handledStatus || "not_applicable";
+  const normalized = handledStatus === "handled" ? "handled" : "unhandled";
   return `<span class="status-pill handled ${escapeHtml(normalized)}">${escapeHtml(handledStatusLabel(normalized))}</span>`;
 }
 
@@ -394,9 +393,7 @@ function renderLogs(items) {
         `<button class="small-button neutral" type="button" data-ip="${escapeHtml(item.client_ip)}">封禁</button>`,
       ];
 
-      if (alertStatus !== "not_applicable") {
-        buttons.push(renderLogDispositionControl(item.id, alertStatus));
-      }
+      buttons.push(renderLogDispositionControl(item.id, alertStatus));
 
       return `
         <tr class="${severityClass === "high" ? "log-row-high" : ""} ${alertStatus !== "not_applicable" ? `log-row-${alertStatus}` : ""}">
@@ -498,7 +495,7 @@ function syncLogsSelectionUi(items) {
 
   selectAll.checked = items.length > 0 && selectedCount === items.length;
   selectAll.indeterminate = selectedCount > 0 && selectedCount < items.length;
-  summary.textContent = `已选 ${selectedCount} 条告警，涉及 ${uniqueIps.size} 个 IP`;
+  summary.textContent = `已选 ${selectedCount} 条流量，涉及 ${uniqueIps.size} 个 IP`;
   bulkButton.disabled = uniqueIps.size === 0;
   bulkDispositionButton.disabled = selectedCount === 0;
 }
@@ -516,7 +513,7 @@ function renderLogsPagination(payload) {
   const totalPages = Number(payload.total_pages || 0);
 
   if (!total) {
-    summary.textContent = "暂无告警日志";
+    summary.textContent = "暂无流量日志";
     container.innerHTML = "";
     return;
   }
@@ -570,7 +567,7 @@ function renderLogsPagination(payload) {
 }
 
 function renderAlertViewTabs(overview) {
-  setText("alert-view-total", formatCount(overview.total_alerts || 0));
+  setText("alert-view-total", formatCount(overview.total_requests || 0));
   setText("alert-view-real-attack", formatCount(overview.real_attack_alerts || 0));
   setText("alert-view-customer-business", formatCount(overview.customer_business_alerts || 0));
   setText("alert-view-pending-business", formatCount(overview.pending_business_alerts || 0));
@@ -583,13 +580,23 @@ function renderAlertViewTabs(overview) {
 }
 
 function renderHandledViewTabs(overview) {
-  setText("handled-view-total", formatCount(overview.total_alerts || 0));
+  setText("handled-view-total", formatCount(overview.total_requests || 0));
   setText("handled-view-unhandled", formatCount(overview.unhandled_alerts || 0));
   setText("handled-view-handled", formatCount(overview.handled_alerts || 0));
 
   document.querySelectorAll(".alert-process-tab").forEach((button) => {
     const view = button.getAttribute("data-handled-view") || "all";
     button.classList.toggle("active", view === currentHandledView);
+  });
+}
+
+function renderLogScopeTabs(overview) {
+  setText("log-scope-total", formatCount(overview.total_requests || 0));
+  setText("log-scope-alerts", formatCount(overview.total_alerts || 0));
+
+  document.querySelectorAll(".log-scope-tab").forEach((button) => {
+    const view = button.getAttribute("data-log-scope") || "all";
+    button.classList.toggle("active", view === currentLogsScope);
   });
 }
 
@@ -601,13 +608,13 @@ function applyAlertView(view) {
     statusSelect.value = view === "all" ? "" : view;
   }
 
-  const totalNode = document.getElementById("metric-alert-total");
+  const totalNode = document.getElementById("metric-total");
   const realAttackNode = document.getElementById("alert-view-real-attack");
   const customerBusinessNode = document.getElementById("alert-view-customer-business");
   const pendingBusinessNode = document.getElementById("alert-view-pending-business");
   const notifiedEventNode = document.getElementById("alert-view-notified-event");
   renderAlertViewTabs({
-    total_alerts: (totalNode && totalNode.textContent) || "0",
+    total_requests: (totalNode && totalNode.textContent) || "0",
     real_attack_alerts: (realAttackNode && realAttackNode.textContent) || "0",
     customer_business_alerts: (customerBusinessNode && customerBusinessNode.textContent) || "0",
     pending_business_alerts: (pendingBusinessNode && pendingBusinessNode.textContent) || "0",
@@ -618,13 +625,24 @@ function applyAlertView(view) {
 function applyHandledView(view) {
   currentHandledView = view;
 
-  const totalNode = document.getElementById("metric-alert-total");
-  const unhandledNode = document.getElementById("metric-alert-unhandled");
-  const handledNode = document.getElementById("metric-alert-handled");
+  const totalNode = document.getElementById("metric-total");
+  const unhandledNode = document.getElementById("handled-view-unhandled");
+  const handledNode = document.getElementById("handled-view-handled");
   renderHandledViewTabs({
-    total_alerts: (totalNode && totalNode.textContent) || "0",
+    total_requests: (totalNode && totalNode.textContent) || "0",
     unhandled_alerts: (unhandledNode && unhandledNode.textContent) || "0",
     handled_alerts: (handledNode && handledNode.textContent) || "0",
+  });
+}
+
+function applyLogScope(view) {
+  currentLogsScope = view;
+
+  const totalNode = document.getElementById("metric-total");
+  const alertNode = document.getElementById("metric-alert-total");
+  renderLogScopeTabs({
+    total_requests: (totalNode && totalNode.textContent) || "0",
+    total_alerts: (alertNode && alertNode.textContent) || "0",
   });
 }
 
@@ -649,7 +667,7 @@ async function bulkBlockSelectedLogs() {
 
   const reason = window.prompt(
     `将批量封禁 ${selectedIps.length} 个 IP，请输入统一封禁原因`,
-    "批量处置告警来源"
+    "批量处置异常流量来源"
   );
   if (reason === null) {
     return;
@@ -658,7 +676,7 @@ async function bulkBlockSelectedLogs() {
   for (const ip of selectedIps) {
     await fetchJson("/api/blocked-ips", {
       method: "POST",
-      body: JSON.stringify({ ip, reason: reason || "批量处置告警来源" }),
+      body: JSON.stringify({ ip, reason: reason || "批量处置异常流量来源" }),
     });
   }
 
@@ -872,7 +890,6 @@ function buildLogsUrl() {
   const keyword = (keywordNode && keywordNode.value.trim()) || "";
   params.set("page", String(currentLogsPage));
   params.set("page_size", String(LOGS_PAGE_SIZE));
-  params.set("alerts_only", "true");
 
   if (currentHandledView === "handled" || currentHandledView === "unhandled") {
     params.set("handled_status", currentHandledView);
@@ -934,6 +951,7 @@ async function refreshLogsPage() {
 
   setText("runtime-user", runtime.username || "admin");
   fillCommonMetrics(overview);
+  renderLogScopeTabs(overview);
   renderHandledViewTabs(overview);
   renderAlertViewTabs(overview);
   renderLogs(logs.items || []);
@@ -1032,8 +1050,22 @@ function setupDashboard() {
 function setupLogsPage() {
   setupAuthenticatedPage();
   currentLogsPage = 1;
+  currentLogsScope = "all";
   currentAlertView = "all";
   currentHandledView = "all";
+
+  document.querySelectorAll(".log-scope-tab").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const view = button.getAttribute("data-log-scope") || "all";
+      if (view === currentLogsScope) {
+        return;
+      }
+      selectedLogEntries.clear();
+      currentLogsPage = 1;
+      applyLogScope(view);
+      await refreshLogsPage();
+    });
+  });
 
   const filterForm = document.getElementById("log-filter-form");
   if (filterForm) {
