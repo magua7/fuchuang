@@ -105,6 +105,17 @@ async def logs_page(request: Request):
     )
 
 
+@app.get("/block", response_class=HTMLResponse)
+async def block_page(request: Request):
+    if not is_authenticated(request):
+        return RedirectResponse(url="/login", status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="block.html",
+        context={"app_name": "magualine", "active_page": "block"},
+    )
+
+
 @app.post("/api/login")
 async def login(request: Request):
     payload = await request.json()
@@ -211,9 +222,11 @@ async def bulk_patch_log_status(request: Request):
 
 
 @app.get("/api/blocked-ips")
-async def blocked_ips(request: Request):
+async def blocked_ips(request: Request, page: int = 1, page_size: int = 20):
     require_api_auth(request)
-    return {"items": list_blocked_ips()}
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    return list_blocked_ips(page=page, page_size=page_size)
 
 
 @app.post("/api/blocked-ips")

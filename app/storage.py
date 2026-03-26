@@ -613,12 +613,31 @@ def get_overview(hours: int = 24) -> dict:
     }
 
 
-def list_blocked_ips() -> list[dict]:
+def list_blocked_ips(page: int = 1, page_size: int = 20) -> dict:
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    offset = (page - 1) * page_size
+
     with closing(get_connection()) as connection:
+        total = connection.execute("SELECT COUNT(*) AS count FROM blocked_ips").fetchone()["count"]
         rows = connection.execute(
-            "SELECT id, ip, reason, created_at, created_by FROM blocked_ips ORDER BY id DESC"
+            """
+            SELECT id, ip, reason, created_at, created_by
+            FROM blocked_ips
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (page_size, offset),
         ).fetchall()
-    return [dict(row) for row in rows]
+
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    return {
+        "items": [dict(row) for row in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 def add_blocked_ip(ip: str, reason: str | None, created_by: str = "admin") -> None:

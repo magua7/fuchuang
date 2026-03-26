@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} - 封禁 IP 管理</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+  </head>
+  <body class="dashboard-page" data-page="block">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">MAGUALINE</span>
+        <h1>封禁 IP 管理</h1>
+      </div>
+      <div class="topbar-actions">
+        <nav class="nav-tabs">
+          <a href="/dashboard" class="nav-tab {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
+          <a href="/screen" class="nav-tab {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
+          <a href="/logs" class="nav-tab {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
+          <a href="/block" class="nav-tab {% if active_page == 'block' %}active{% endif %}">封禁 IP</a>
+        </nav>
+        <span id="runtime-user" class="muted-text">admin</span>
+        <button id="logout-button" class="ghost-button" type="button">退出登录</button>
+      </div>
+    </header>
+
+    <main class="dashboard-shell">
+      <section class="metrics-grid">
+        <article class="metric-card">
+          <span class="metric-label">24h 总请求</span>
+          <strong id="metric-total">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">24h 拦截次数</span>
+          <strong id="metric-blocked">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">24h 独立源 IP</span>
+          <strong id="metric-ips">0</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">当前封禁 IP</span>
+          <strong id="metric-manual-blocks">0</strong>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel panel-wide">
+          <div class="panel-header panel-header-wrap">
+            <div>
+              <h2>封禁列表</h2>
+              <span class="panel-subtitle">单独管理人工封禁的源 IP，适合持续扫描、恶意探测和复发来源的集中处置。</span>
+            </div>
+            <form id="block-form" class="filter-row block-form">
+              <input id="block-ip" type="text" placeholder="例如 203.0.113.10" required />
+              <input id="block-reason" type="text" placeholder="例如 持续扫描、暴力破解或人工处置" />
+              <button class="primary-button" type="submit">加入封禁列表</button>
+            </form>
+          </div>
+
+          <div id="blocked-ips" class="blocked-list"></div>
+
+          <div class="pagination-bar">
+            <div id="blocked-pagination-summary" class="pagination-summary">第 1 页</div>
+            <div id="blocked-pagination" class="pagination-controls"></div>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+  </body>
+</html>

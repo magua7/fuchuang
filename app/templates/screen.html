@@ -18,6 +18,7 @@
         <a href="/dashboard" class="screen-nav-link {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
         <a href="/screen" class="screen-nav-link {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
         <a href="/logs" class="screen-nav-link {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
+        <a href="/block" class="screen-nav-link {% if active_page == 'block' %}active{% endif %}">封禁 IP</a>
       </nav>
 
       <div class="screen-meta">
@@ -83,11 +84,11 @@
                 <strong id="screen-pass-rate">0%</strong>
               </div>
               <div class="screen-summary-item">
-                <span>待处理</span>
+                <span>未处理流量</span>
                 <strong id="screen-metric-alert-pending">0</strong>
               </div>
               <div class="screen-summary-item">
-                <span>已处置</span>
+                <span>已处理流量</span>
                 <strong id="screen-metric-alert-resolved">0</strong>
               </div>
             </div>

@@ -3,20 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ app_name }} - 流量日志中心</title>
+    <title>{{ app_name }} - 日志中心</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
   </head>
   <body class="dashboard-page" data-page="logs">
     <header class="topbar">
       <div>
         <span class="eyebrow">MAGUALINE</span>
-        <h1>流量与日志分析</h1>
+        <h1>日志与告警分析</h1>
       </div>
       <div class="topbar-actions">
         <nav class="nav-tabs">
           <a href="/dashboard" class="nav-tab {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
           <a href="/screen" class="nav-tab {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
           <a href="/logs" class="nav-tab {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
+          <a href="/block" class="nav-tab {% if active_page == 'block' %}active{% endif %}">封禁 IP</a>
         </nav>
         <span id="runtime-user" class="muted-text">admin</span>
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
@@ -97,7 +98,7 @@
           <div class="panel-header panel-header-wrap">
             <div>
               <h2>请求与攻击日志</h2>
-              <span class="panel-subtitle">全部流量和告警事件统一展示，靠动作、分类、级别和处理状态做筛选，不再拆成两套页面。</span>
+              <span class="panel-subtitle">全部流量和风险事件统一展示，可直接封禁、批量处置和查看请求详情。</span>
             </div>
             <form id="log-filter-form" class="filter-row">
               <select id="log-action">
@@ -130,7 +131,7 @@
               <span>全选本页</span>
             </label>
             <div class="bulk-action-meta">
-              <span id="logs-selected-summary">已选 0 条流量</span>
+              <span id="logs-selected-summary">已选 0 条流量，涉及 0 个 IP</span>
               <select id="bulk-disposition-status" class="bulk-disposition-select">
                 <option value="real_attack">真实攻击行为</option>
                 <option value="customer_business">客户业务行为</option>
@@ -174,7 +175,7 @@
         <aside class="panel">
           <div class="panel-header">
             <h2>分类说明</h2>
-            <span class="panel-subtitle">帮助你快速区分攻击、业务和已完成通报的事件。</span>
+            <span class="panel-subtitle">帮助你快速区分攻击、业务和已通报的事件。</span>
           </div>
           <div class="rank-list">
             <div class="rank-item">

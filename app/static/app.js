@@ -114,7 +114,9 @@ const SCREEN_REGION_IDS = {
 };
 
 const LOGS_PAGE_SIZE = 20;
+const BLOCKED_IPS_PAGE_SIZE = 20;
 let currentLogsPage = 1;
+let currentBlockedIpsPage = 1;
 let currentAlertView = "all";
 let currentHandledView = "all";
 let currentLogsScope = "all";
@@ -320,7 +322,76 @@ function renderBlockedIps(items) {
     button.addEventListener("click", async () => {
       const id = button.getAttribute("data-unblock");
       await fetchJson(`/api/blocked-ips/${id}`, { method: "DELETE" });
-      await refreshDashboard();
+      if (document.body.dataset.page === "block") {
+        await refreshBlockPage();
+      } else {
+        await refreshDashboard();
+      }
+    });
+  });
+}
+
+function renderBlockedIpsPagination(payload) {
+  const summary = document.getElementById("blocked-pagination-summary");
+  const container = document.getElementById("blocked-pagination");
+  if (!summary || !container) {
+    return;
+  }
+
+  const total = Number(payload.total || 0);
+  const page = Number(payload.page || 1);
+  const pageSize = Number(payload.page_size || BLOCKED_IPS_PAGE_SIZE);
+  const totalPages = Number(payload.total_pages || 0);
+
+  if (!total) {
+    summary.textContent = "暂无封禁 IP";
+    container.innerHTML = "";
+    return;
+  }
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  summary.textContent = `显示第 ${start}-${end} 条，共 ${total} 条，当前第 ${page}/${Math.max(totalPages, 1)} 页`;
+
+  const buttons = [];
+  buttons.push(`
+    <button class="pagination-button" type="button" data-block-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>
+      上一页
+    </button>
+  `);
+
+  const pageNumbers = [];
+  const windowSize = 5;
+  const startPage = Math.max(1, page - 2);
+  const endPage = Math.min(totalPages, startPage + windowSize - 1);
+  const adjustedStart = Math.max(1, endPage - windowSize + 1);
+  for (let value = adjustedStart; value <= endPage; value += 1) {
+    pageNumbers.push(value);
+  }
+
+  pageNumbers.forEach((value) => {
+    buttons.push(`
+      <button class="pagination-button ${value === page ? "active" : ""}" type="button" data-block-page="${value}">
+        ${value}
+      </button>
+    `);
+  });
+
+  buttons.push(`
+    <button class="pagination-button" type="button" data-block-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>
+      下一页
+    </button>
+  `);
+
+  container.innerHTML = buttons.join("");
+  container.querySelectorAll("button[data-block-page]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const nextPage = Number(button.getAttribute("data-block-page") || "1");
+      if (!nextPage || nextPage === currentBlockedIpsPage) {
+        return;
+      }
+      currentBlockedIpsPage = nextPage;
+      await refreshBlockPage();
     });
   });
 }
@@ -652,7 +723,10 @@ async function blockIp(ip, reason) {
     body: JSON.stringify({ ip, reason }),
   });
 
-  if (document.body.dataset.page === "dashboard") {
+  if (document.body.dataset.page === "block") {
+    currentBlockedIpsPage = 1;
+    await refreshBlockPage();
+  } else if (document.body.dataset.page === "dashboard") {
     await refreshDashboard();
   } else if (document.body.dataset.page === "logs") {
     await refreshLogsPage();
@@ -913,11 +987,17 @@ function buildLogsUrl() {
   return `/api/logs?${params.toString()}`;
 }
 
+function buildBlockedIpsUrl() {
+  const params = new URLSearchParams();
+  params.set("page", String(currentBlockedIpsPage));
+  params.set("page_size", String(BLOCKED_IPS_PAGE_SIZE));
+  return `/api/blocked-ips?${params.toString()}`;
+}
+
 async function refreshDashboard() {
-  const [runtime, overview, blockedIps] = await Promise.all([
+  const [runtime, overview] = await Promise.all([
     fetchJson("/api/runtime"),
     fetchJson("/api/overview"),
-    fetchJson("/api/blocked-ips"),
   ]);
 
   setText("runtime-user", runtime.username || "admin");
@@ -934,7 +1014,24 @@ async function refreshDashboard() {
   renderRankList("top-paths", overview.top_paths || [], "最近 24 小时没有路径数据", {
     valueFormatter: (item) => formatCount(item.count || 0),
   });
+}
+
+async function refreshBlockPage() {
+  const [runtime, overview, blockedIps] = await Promise.all([
+    fetchJson("/api/runtime"),
+    fetchJson("/api/overview"),
+    fetchJson(buildBlockedIpsUrl()),
+  ]);
+
+  if (blockedIps.total_pages && currentBlockedIpsPage > blockedIps.total_pages) {
+    currentBlockedIpsPage = blockedIps.total_pages;
+    return refreshBlockPage();
+  }
+
+  setText("runtime-user", runtime.username || "admin");
+  fillCommonMetrics(overview);
   renderBlockedIps(blockedIps.items || []);
+  renderBlockedIpsPagination(blockedIps);
 }
 
 async function refreshLogsPage() {
@@ -1024,6 +1121,19 @@ function setupAuthenticatedPage() {
 function setupDashboard() {
   setupAuthenticatedPage();
 
+  refreshDashboard().catch((error) => {
+    window.alert(`加载总览数据失败：${error.message}`);
+  });
+
+  window.setInterval(() => {
+    refreshDashboard().catch(() => {});
+  }, 20000);
+}
+
+function setupBlockPage() {
+  setupAuthenticatedPage();
+  currentBlockedIpsPage = 1;
+
   const blockForm = document.getElementById("block-form");
   if (blockForm) {
     blockForm.addEventListener("submit", async (event) => {
@@ -1038,12 +1148,12 @@ function setupDashboard() {
     });
   }
 
-  refreshDashboard().catch((error) => {
-    window.alert(`加载总览数据失败：${error.message}`);
+  refreshBlockPage().catch((error) => {
+    window.alert(`加载 IP 封禁数据失败：${error.message}`);
   });
 
   window.setInterval(() => {
-    refreshDashboard().catch(() => {});
+    refreshBlockPage().catch(() => {});
   }, 20000);
 }
 
@@ -1201,6 +1311,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (document.body.dataset.page === "logs") {
     setupLogsPage();
+  }
+
+  if (document.body.dataset.page === "block") {
+    setupBlockPage();
   }
 
   if (isScreenPage()) {

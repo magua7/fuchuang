@@ -17,6 +17,7 @@
           <a href="/dashboard" class="nav-tab {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
           <a href="/screen" class="nav-tab {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
           <a href="/logs" class="nav-tab {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
+          <a href="/block" class="nav-tab {% if active_page == 'block' %}active{% endif %}">封禁 IP</a>
         </nav>
         <span id="runtime-user" class="muted-text">admin</span>
         <button id="logout-button" class="ghost-button" type="button">退出登录</button>
@@ -53,11 +54,11 @@
           <strong id="metric-alert-high">0</strong>
         </article>
         <article class="metric-card metric-card-alert pending">
-          <span class="metric-label">待处理</span>
+          <span class="metric-label">未处理流量</span>
           <strong id="metric-alert-pending">0</strong>
         </article>
         <article class="metric-card metric-card-alert resolved">
-          <span class="metric-label">已处置</span>
+          <span class="metric-label">已处理流量</span>
           <strong id="metric-alert-resolved">0</strong>
         </article>
       </section>
@@ -67,7 +68,7 @@
           <div class="panel-header">
             <div>
               <h2>运营态势摘要</h2>
-              <span class="panel-subtitle">围绕流量代理、攻击拦截、日志留痕与处置闭环</span>
+              <span class="panel-subtitle">围绕流量代理、攻击拦截、日志留痕和人工处置形成闭环</span>
             </div>
           </div>
 
@@ -76,7 +77,7 @@
               <span class="map-kicker">AUTO ANALYSIS</span>
               <strong id="analysis-headline">当前整体态势稳定</strong>
               <p id="analysis-copy" class="summary-copy">
-                近 24 小时暂无明显攻击峰值，建议持续关注入口流量和高危规则命中情况。
+                近 24 小时暂无明显攻击峰值，建议持续关注入口流量波动和高危规则命中情况。
               </p>
             </div>
             <div class="summary-stat-pair">
@@ -111,12 +112,16 @@
 
           <div class="quick-link-grid">
             <a class="quick-link-card" href="/screen">
-              <span>态势感知大屏</span>
-              <strong>进入比赛展示页，查看更完整的可视化大屏。</strong>
+              <span>态势大屏</span>
+              <strong>进入比赛展示页，查看更完整的可视化态势感知。</strong>
             </a>
             <a class="quick-link-card" href="/logs">
               <span>日志中心</span>
-              <strong>按 IP、路径、规则、状态查看攻击和告警详情。</strong>
+              <strong>统一查看全部流量、拦截记录和人工处置动作。</strong>
+            </a>
+            <a class="quick-link-card" href="/block">
+              <span>封禁 IP</span>
+              <strong>单独管理封禁列表，支持新增、翻页和人工解封。</strong>
             </a>
           </div>
         </article>
@@ -125,7 +130,7 @@
           <div class="panel-header">
             <div>
               <h2>高危事件</h2>
-              <span class="panel-subtitle">单独高亮展示，便于优先处置</span>
+              <span class="panel-subtitle">单独高亮显示，便于优先处置</span>
             </div>
           </div>
           <div id="high-risk-alerts" class="alert-list"></div>
@@ -155,29 +160,6 @@
             <span class="panel-subtitle">最近 24 小时热点访问入口</span>
           </div>
           <div id="top-paths" class="rank-list"></div>
-        </article>
-      </section>
-
-      <section class="content-grid">
-        <article class="panel panel-wide">
-          <div class="panel-header">
-            <h2>IP 封禁</h2>
-            <span class="panel-subtitle">手动加入黑名单，适合处置持续扫描或恶意来源</span>
-          </div>
-
-          <form id="block-form" class="stack block-form">
-            <label class="field">
-              <span>IP 地址</span>
-              <input id="block-ip" type="text" placeholder="例如 203.0.113.10" required />
-            </label>
-            <label class="field">
-              <span>封禁原因</span>
-              <input id="block-reason" type="text" placeholder="例如 持续扫描、暴力破解或人工处置" />
-            </label>
-            <button class="primary-button" type="submit">加入封禁列表</button>
-          </form>
-
-          <div id="blocked-ips" class="blocked-list"></div>
         </article>
       </section>
     </main>
