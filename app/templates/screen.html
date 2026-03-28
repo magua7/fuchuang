@@ -3,229 +3,192 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ app_name }} - 态势感知大屏</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+    <title>{{ app_name }} - 24 小时威胁态势大屏</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260328screen10" />
+    <link rel="stylesheet" href="{{ url_for('static', path='/screen.css') }}?v=20260328screen10" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/static/vendor/three.module.js"
+        }
+      }
+    </script>
   </head>
-  <body class="screen-page" data-page="screen">
-    <header class="screen-topbar">
-      <div class="screen-brand">
-        <span class="eyebrow">MAGUALINE THREAT SCREEN</span>
-        <h1>威胁态势感知大屏</h1>
-        <p>聚焦入口流量、漏洞利用、攻击来源与处置状态，适合比赛展示与现场演示。</p>
+  <body class="screen-v2-page" data-page="screen-v3">
+    <div class="screen-v2-backdrop"></div>
+    <div class="screen-v2-backdrop screen-v2-backdrop--secondary"></div>
+
+    <header class="threat-screen__topbar">
+      <div class="threat-screen__brand">
+        <div class="threat-screen__brand-mark">
+          <span class="threat-screen__chip">MAGUALINE</span>
+          <i></i>
+        </div>
+        <div class="threat-screen__headline">
+          <h1>外部威胁态势</h1>
+          <p>面向最近 24 小时的攻击流向、来源地区、威胁类型与处置进展可视化分析</p>
+        </div>
       </div>
 
-      <nav class="screen-nav">
-        <a href="/dashboard" class="screen-nav-link {% if active_page == 'dashboard' %}active{% endif %}">总览</a>
-        <a href="/screen" class="screen-nav-link {% if active_page == 'screen' %}active{% endif %}">态势大屏</a>
-        <a href="/logs" class="screen-nav-link {% if active_page == 'logs' %}active{% endif %}">日志中心</a>
-        <a href="/block" class="screen-nav-link {% if active_page == 'block' %}active{% endif %}">封禁 IP</a>
-      </nav>
-
-      <div class="screen-meta">
-        <div class="screen-time-block">
-          <span>北京时间</span>
+      <div class="threat-screen__meta">
+        <div class="threat-screen__window">
+          <span>统计窗口</span>
+          <strong>最近 24 小时</strong>
+        </div>
+        <div class="threat-screen__clock">
+          <span id="screen-date">--</span>
           <strong id="screen-time">--:--:--</strong>
         </div>
-        <div class="screen-user-block">
-          <span>当前账号</span>
-          <strong id="runtime-user">admin</strong>
-        </div>
-        <button id="logout-button" class="ghost-button ghost-button-dark" type="button">退出登录</button>
+        <div class="threat-screen__runtime">正在刷新数据...</div>
       </div>
+
+      <nav class="threat-screen__nav">
+        <a href="/dashboard" class="threat-screen__nav-link">总览</a>
+        <a href="/screen" class="threat-screen__nav-link active">态势大屏</a>
+        <a href="/logs" class="threat-screen__nav-link">日志中心</a>
+        <a href="/block" class="threat-screen__nav-link">封禁 IP</a>
+        <button id="logout-button" class="threat-screen__logout" type="button">退出登录</button>
+      </nav>
     </header>
 
-    <main class="screen-shell">
-      <section class="screen-overview-cards">
-        <article class="screen-metric-card">
-          <span>24h 总请求</span>
-          <strong id="screen-metric-total">0</strong>
-        </article>
-        <article class="screen-metric-card">
-          <span>24h 拦截次数</span>
-          <strong id="screen-metric-blocked">0</strong>
-        </article>
-        <article class="screen-metric-card">
-          <span>24h 高危告警</span>
-          <strong id="screen-metric-alert-high">0</strong>
-        </article>
-        <article class="screen-metric-card">
-          <span>24h 独立源 IP</span>
-          <strong id="screen-metric-ips">0</strong>
-        </article>
-        <article class="screen-metric-card">
-          <span>当前封禁 IP</span>
-          <strong id="screen-metric-blocked-ips">0</strong>
-        </article>
+    <main class="threat-screen">
+      <aside class="threat-screen__side threat-screen__side--left">
+        <section class="threat-panel threat-panel--overview">
+          <div class="threat-panel__title">
+            <h2>外部威胁总览</h2>
+            <span>24 小时攻击压缩画像</span>
+          </div>
+          <div class="threat-ring-list">
+            <div class="threat-ring-card">
+              <div class="threat-ring-card__circle">
+                <span>威胁数量</span>
+                <strong id="screen-total-alerts">0</strong>
+              </div>
+              <p>已识别风险与人工处置流量总量</p>
+            </div>
+            <div class="threat-ring-card">
+              <div class="threat-ring-card__circle">
+                <span>攻击 IP</span>
+                <strong id="screen-total-ips">0</strong>
+              </div>
+              <p>最近 24 小时独立来源 IP 数量</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="threat-panel">
+          <div class="threat-panel__title">
+            <h2>受害入口 TOP5</h2>
+            <span>被频繁访问或试探的业务路径</span>
+          </div>
+          <div id="screen-victim-top5" class="threat-rank-list"></div>
+        </section>
+
+        <section class="threat-panel">
+          <div class="threat-panel__title">
+            <h2>威胁级别分布</h2>
+            <span>按危急、高危、中危、低危划分</span>
+          </div>
+          <div class="threat-severity">
+            <div class="threat-severity__donut" id="screen-severity-donut">
+              <div class="threat-severity__core">
+                <span>24h 风险</span>
+                <strong id="screen-severity-total">0</strong>
+              </div>
+            </div>
+            <div id="screen-severity-legend" class="threat-severity__legend"></div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="threat-screen__center">
+        <section class="threat-panel threat-panel--globe">
+          <div class="threat-panel__title threat-panel__title--hero">
+            <div>
+              <h2>攻击流向地球仪</h2>
+              <span>按地区展示外部攻击流向业务主站的轨迹，支持拖拽旋转与自动轮播</span>
+            </div>
+            <div class="threat-panel__hero-meta">
+              <span id="screen-target-name">防护主站</span>
+              <strong id="screen-target-label">中国 · 业务区</strong>
+            </div>
+          </div>
+
+          <div class="threat-globe">
+            <div id="threat-globe-stage" class="threat-globe__stage"></div>
+            <div id="threat-globe-labels" class="threat-globe__labels"></div>
+            <div class="threat-globe__ornament threat-globe__ornament--left"></div>
+            <div class="threat-globe__ornament threat-globe__ornament--right"></div>
+            <div class="threat-globe__hint">拖拽旋转地球 · 滚轮缩放视角 · 攻击轨迹按来源聚合展示</div>
+          </div>
+        </section>
+
+        <section class="threat-panel threat-panel--timeline">
+          <div class="threat-panel__title">
+            <h2>外部威胁变化趋势</h2>
+            <span>仅展示最近 24 小时，按小时跟踪总流量、拦截量与高危事件</span>
+          </div>
+          <div class="threat-timeline">
+            <svg id="screen-trend-chart" class="threat-timeline__chart" viewBox="0 0 960 240" preserveAspectRatio="none"></svg>
+            <div class="threat-timeline__legend">
+              <span><i class="legend-dot legend-dot--total"></i>总流量</span>
+              <span><i class="legend-dot legend-dot--blocked"></i>拦截流量</span>
+              <span><i class="legend-dot legend-dot--high"></i>高危事件</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="threat-quickstats">
+          <article class="threat-stat-card">
+            <span>24h 拦截次数</span>
+            <strong id="screen-blocked-requests">0</strong>
+          </article>
+          <article class="threat-stat-card">
+            <span>高危事件</span>
+            <strong id="screen-high-risk">0</strong>
+          </article>
+          <article class="threat-stat-card">
+            <span>当前封禁 IP</span>
+            <strong id="screen-blocked-ips">0</strong>
+          </article>
+        </section>
       </section>
 
-      <section class="screen-grid">
-        <div class="screen-column">
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>风险概览</h2>
-                <span>自动汇总过去 24 小时的整体态势</span>
-              </div>
-            </div>
+      <aside class="threat-screen__side threat-screen__side--right">
+        <section class="threat-panel">
+          <div class="threat-panel__title">
+            <h2>外部攻击 IP TOP5</h2>
+            <span>按攻击频率与风险度排序</span>
+          </div>
+          <div id="screen-attack-ip-top5" class="threat-rank-list threat-rank-list--ips"></div>
+        </section>
 
-            <div class="screen-summary-hero">
-              <span class="map-kicker">AUTO ANALYSIS</span>
-              <strong id="screen-headline">当前整体态势稳定</strong>
-              <p id="screen-copy">近 24 小时暂无明显攻击峰值，建议继续关注重点入口的访问波动。</p>
-            </div>
+        <section class="threat-panel">
+          <div class="threat-panel__title">
+            <h2>外部威胁类型 TOP5</h2>
+            <span>最近最密集命中的攻击类型</span>
+          </div>
+          <div id="screen-type-top5" class="threat-rank-list"></div>
+        </section>
 
-            <div class="screen-summary-grid">
-              <div class="screen-summary-item">
-                <span>拦截占比</span>
-                <strong id="screen-block-rate">0%</strong>
-              </div>
-              <div class="screen-summary-item">
-                <span>放行占比</span>
-                <strong id="screen-pass-rate">0%</strong>
-              </div>
-              <div class="screen-summary-item">
-                <span>未处理流量</span>
-                <strong id="screen-metric-alert-pending">0</strong>
-              </div>
-              <div class="screen-summary-item">
-                <span>已处理流量</span>
-                <strong id="screen-metric-alert-resolved">0</strong>
-              </div>
-            </div>
-          </article>
+        <section class="threat-panel">
+          <div class="threat-panel__title">
+            <h2>外部威胁来源 TOP5</h2>
+            <span>按来源地区归并后的攻击热度</span>
+          </div>
+          <div id="screen-origin-top5" class="threat-rank-list"></div>
+        </section>
 
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>攻击类型排行</h2>
-                <span>最近 24 小时命中最频繁的攻击类型</span>
-              </div>
-            </div>
-            <div id="screen-attack-types" class="screen-rank-list"></div>
-          </article>
-
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>热点 CVE</h2>
-                <span>已识别的漏洞利用告警编号</span>
-              </div>
-            </div>
-            <div id="screen-cve-feed" class="screen-chip-list"></div>
-          </article>
-        </div>
-
-        <div class="screen-column screen-column-center">
-          <article class="screen-panel screen-panel-map">
-            <div class="screen-panel-header">
-              <div>
-                <h2>攻击源态势地图</h2>
-                <span>结合来源地域、告警等级和流量变化进行展示</span>
-              </div>
-            </div>
-
-            <div class="screen-map-stage">
-              <div class="screen-map-grid"></div>
-              <div class="screen-map-sweep"></div>
-              <div class="screen-map-ring ring-1"></div>
-              <div class="screen-map-ring ring-2"></div>
-              <div class="screen-map-ring ring-3"></div>
-              <div class="screen-map-ring ring-4"></div>
-              <div class="screen-map-core">
-                <span>MAGUALINE</span>
-                <strong>Threat Mesh</strong>
-                <p>入口流量 · 攻击拦截 · 告警分析</p>
-              </div>
-
-              <div class="screen-map-node node-huabei">
-                <span>华北</span>
-                <strong id="screen-region-huabei">0</strong>
-              </div>
-              <div class="screen-map-node node-huadong">
-                <span>华东</span>
-                <strong id="screen-region-huadong">0</strong>
-              </div>
-              <div class="screen-map-node node-huanan">
-                <span>华南</span>
-                <strong id="screen-region-huanan">0</strong>
-              </div>
-              <div class="screen-map-node node-huazhong">
-                <span>华中</span>
-                <strong id="screen-region-huazhong">0</strong>
-              </div>
-              <div class="screen-map-node node-xibu">
-                <span>西部</span>
-                <strong id="screen-region-xibu">0</strong>
-              </div>
-              <div class="screen-map-node node-dongbei">
-                <span>东北</span>
-                <strong id="screen-region-dongbei">0</strong>
-              </div>
-              <div class="screen-map-node node-bendi">
-                <span>本地</span>
-                <strong id="screen-region-bendi">0</strong>
-              </div>
-              <div class="screen-map-node node-haiwai">
-                <span>海外/未知</span>
-                <strong id="screen-region-haiwai">0</strong>
-              </div>
-
-              <div class="screen-map-footer-card left">
-                <span>暴力破解</span>
-                <strong id="screen-metric-bruteforce">0</strong>
-              </div>
-              <div class="screen-map-footer-card right">
-                <span>WebShell 上传</span>
-                <strong id="screen-metric-webshell">0</strong>
-              </div>
-            </div>
-          </article>
-
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>近 12 小时流量趋势</h2>
-                <span>按小时展示总流量、拦截量与高危事件量</span>
-              </div>
-            </div>
-            <div id="screen-trend" class="screen-trend-bars"></div>
-          </article>
-        </div>
-
-        <div class="screen-column">
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>最新告警流</h2>
-                <span>最近高风险与已触发处置状态的事件</span>
-              </div>
-            </div>
-            <div id="screen-alert-feed" class="screen-alert-feed"></div>
-          </article>
-
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>活跃源 IP</h2>
-                <span>按访问频次排序，适合快速锁定可疑来源</span>
-              </div>
-            </div>
-            <div id="screen-source-ips" class="screen-rank-list"></div>
-          </article>
-
-          <article class="screen-panel">
-            <div class="screen-panel-header">
-              <div>
-                <h2>热点访问路径</h2>
-                <span>查看被攻击或访问最频繁的入口路径</span>
-              </div>
-            </div>
-            <div id="screen-paths" class="screen-rank-list"></div>
-          </article>
-        </div>
-      </section>
+        <section class="threat-panel">
+          <div class="threat-panel__title">
+            <h2>最新告警流</h2>
+            <span>滚动查看最近 24 小时重点事件</span>
+          </div>
+          <div id="screen-recent-alerts" class="threat-alert-feed"></div>
+        </section>
+      </aside>
     </main>
 
-    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+    <script type="module" src="{{ url_for('static', path='/screen.js') }}?v=20260328screen10"></script>
   </body>
 </html>

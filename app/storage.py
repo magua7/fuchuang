@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import get_settings
-from .ip_geo import classify_special_ip
+from .ip_geo import classify_special_ip, lookup_ip_geo
 
 
 REGION_BUCKET_RULES = {
@@ -21,6 +21,157 @@ REGION_BUCKET_RULES = {
 }
 
 SCREEN_BUCKET_ORDER = ("华北", "华东", "华南", "华中", "西部", "东北", "本地", "海外", "未知")
+
+SCREEN_TARGET = {
+    "name": "防护主站",
+    "label": "中国 · 业务区",
+    "lng": 112.9389,
+    "lat": 28.2282,
+}
+
+REGION_COORDINATES = {
+    "华北": {"lng": 116.4074, "lat": 39.9042},
+    "华东": {"lng": 121.4737, "lat": 31.2304},
+    "华南": {"lng": 113.2644, "lat": 23.1291},
+    "华中": {"lng": 114.3055, "lat": 30.5928},
+    "西部": {"lng": 104.0665, "lat": 30.5728},
+    "东北": {"lng": 126.6424, "lat": 45.7567},
+    "本地": {"lng": 112.9389, "lat": 28.2282},
+    "海外": {"lng": 12.4964, "lat": 41.9028},
+    "未知": {"lng": 12.4964, "lat": 41.9028},
+}
+
+COUNTRY_COORDINATES = {
+    "中国": {"lng": 104.1954, "lat": 35.8617},
+    "美国": {"lng": -98.5795, "lat": 39.8283},
+    "英国": {"lng": -2.2426, "lat": 53.4808},
+    "荷兰": {"lng": 5.2913, "lat": 52.1326},
+    "德国": {"lng": 10.4515, "lat": 51.1657},
+    "俄罗斯": {"lng": 105.3188, "lat": 61.5240},
+    "日本": {"lng": 138.2529, "lat": 36.2048},
+    "韩国": {"lng": 127.7669, "lat": 35.9078},
+    "新加坡": {"lng": 103.8198, "lat": 1.3521},
+    "加拿大": {"lng": -106.3468, "lat": 56.1304},
+    "法国": {"lng": 2.2137, "lat": 46.2276},
+    "澳大利亚": {"lng": 133.7751, "lat": -25.2744},
+    "印度": {"lng": 78.9629, "lat": 20.5937},
+    "巴西": {"lng": -51.9253, "lat": -14.2350},
+    "中国香港": {"lng": 114.1694, "lat": 22.3193},
+    "中国台湾": {"lng": 121.5654, "lat": 23.6978},
+    "香港": {"lng": 114.1694, "lat": 22.3193},
+    "台湾": {"lng": 121.5654, "lat": 23.6978},
+}
+
+PROVINCE_COORDINATES = {
+    "北京": {"lng": 116.4074, "lat": 39.9042},
+    "天津": {"lng": 117.2000, "lat": 39.1333},
+    "上海": {"lng": 121.4737, "lat": 31.2304},
+    "江苏": {"lng": 118.7632, "lat": 32.0617},
+    "浙江": {"lng": 120.1551, "lat": 30.2741},
+    "广东": {"lng": 113.2644, "lat": 23.1291},
+    "湖北": {"lng": 114.3055, "lat": 30.5928},
+    "湖南": {"lng": 112.9389, "lat": 28.2282},
+    "四川": {"lng": 104.0665, "lat": 30.5728},
+    "重庆": {"lng": 106.5516, "lat": 29.5630},
+    "山东": {"lng": 117.1201, "lat": 36.6512},
+    "福建": {"lng": 119.2965, "lat": 26.0745},
+    "河南": {"lng": 113.6254, "lat": 34.7466},
+    "海南": {"lng": 110.3312, "lat": 20.0319},
+    "辽宁": {"lng": 123.4315, "lat": 41.8057},
+    "吉林": {"lng": 125.3235, "lat": 43.8171},
+    "黑龙江": {"lng": 126.6424, "lat": 45.7567},
+    "陕西": {"lng": 108.9398, "lat": 34.3416},
+    "广西": {"lng": 108.3200, "lat": 22.8240},
+    "云南": {"lng": 102.7123, "lat": 25.0406},
+}
+
+
+def _normalize_geo_name(value: str) -> str:
+    text = str(value or "").strip()
+    for token in ("省", "市", "特别行政区", "自治区", "壮族", "回族", "维吾尔"):
+        text = text.replace(token, "")
+    return text.strip()
+
+
+def _geo_coordinates(country: str, region: str, city: str, bucket: str) -> dict:
+    for candidate in (
+        city,
+        _normalize_geo_name(city),
+        region,
+        _normalize_geo_name(region),
+        country,
+        _normalize_geo_name(country),
+        bucket,
+    ):
+        if candidate in PROVINCE_COORDINATES:
+            return PROVINCE_COORDINATES[candidate]
+        if candidate in COUNTRY_COORDINATES:
+            return COUNTRY_COORDINATES[candidate]
+        if candidate in REGION_COORDINATES:
+            return REGION_COORDINATES[candidate]
+    return REGION_COORDINATES["未知"]
+
+
+def _build_location_label(country: str, region: str, city: str, bucket: str) -> str:
+    country = str(country or "").strip()
+    region = _normalize_geo_name(region)
+    city = _normalize_geo_name(city)
+
+    if country and country != "中国":
+        return country
+    if city:
+        return city
+    if region:
+        return region
+    if bucket in REGION_COORDINATES:
+        return bucket
+    return "未知"
+
+
+def _build_screen_flow_name(country: str, region: str, city: str, bucket: str, label: str) -> str:
+    country = str(country or "").strip()
+    region = _normalize_geo_name(region)
+    city = _normalize_geo_name(city)
+    label = str(label or "").strip()
+
+    if country and country != "中国":
+        return _normalize_geo_name(country) or "未知"
+
+    if region:
+        return region
+
+    if label:
+        parts = [
+            _normalize_geo_name(part)
+            for part in label.replace("|", "/").replace("·", "/").split("/")
+            if _normalize_geo_name(part)
+        ]
+        if len(parts) >= 2:
+            return parts[1]
+        if parts:
+            return parts[0]
+
+    if city:
+        return city
+
+    if bucket in REGION_COORDINATES:
+        return bucket
+
+    return "未知"
+
+
+def _ensure_geo(ip: str, geo_cache: dict[str, dict]) -> dict:
+    cached = geo_cache.get(ip)
+    if cached:
+        return cached
+
+    cached = get_cached_ip_geo(ip)
+    if not cached:
+        cached = lookup_ip_geo(ip)
+        cache_ip_geo(ip, cached)
+
+    geo_cache[ip] = cached
+    return cached
 
 
 ALERT_STATUS_ACTIVE = (
@@ -618,6 +769,221 @@ def get_overview(hours: int = 24) -> dict:
         "hourly_trend": hourly_trend,
         "geo_buckets": geo_buckets,
         "active_geo_buckets": active_geo_buckets[:6],
+    }
+
+
+def get_screen_data(hours: int = 24) -> dict:
+    overview = get_overview(hours=hours)
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+    with closing(get_connection()) as connection:
+        recent_rows = connection.execute(
+            """
+            SELECT id, created_at, client_ip, destination_host, destination_ip, path, action,
+                   attack_type, attack_detail, cve_id, severity, alert_status, handled_status
+            FROM request_logs
+            WHERE created_at >= ?
+            ORDER BY id DESC
+            LIMIT 240
+            """,
+            (since,),
+        ).fetchall()
+
+        timeline_rows = connection.execute(
+            """
+            SELECT created_at, action, severity
+            FROM request_logs
+            WHERE created_at >= ?
+            ORDER BY created_at ASC
+            """,
+            (since,),
+        ).fetchall()
+
+        attack_ip_rows = connection.execute(
+            """
+            SELECT client_ip AS ip, COUNT(*) AS count,
+                   SUM(CASE WHEN severity = 'high' THEN 1 ELSE 0 END) AS high_count
+            FROM request_logs
+            WHERE created_at >= ? AND action IN ('blocked', 'error')
+            GROUP BY client_ip
+            ORDER BY count DESC
+            LIMIT 5
+            """,
+            (since,),
+        ).fetchall()
+
+        victim_rows = connection.execute(
+            """
+            SELECT path AS name, COUNT(*) AS count
+            FROM request_logs
+            WHERE created_at >= ?
+            GROUP BY path
+            ORDER BY count DESC
+            LIMIT 5
+            """,
+            (since,),
+        ).fetchall()
+
+        destination_row = connection.execute(
+            """
+            SELECT COALESCE(NULLIF(destination_host, ''), '防护主站') AS name, COUNT(*) AS count
+            FROM request_logs
+            WHERE created_at >= ?
+            GROUP BY COALESCE(NULLIF(destination_host, ''), '防护主站')
+            ORDER BY count DESC
+            LIMIT 1
+            """,
+            (since,),
+        ).fetchone()
+
+        geo_cache_rows = connection.execute(
+            """
+            SELECT ip, label, country, region, city, isp, source
+            FROM ip_geo_cache
+            """
+        ).fetchall()
+
+    geo_cache = {row["ip"]: dict(row) for row in geo_cache_rows}
+
+    flow_seed = [dict(row) for row in recent_rows if row["action"] in ("blocked", "error")]
+    if not flow_seed:
+        flow_seed = [dict(row) for row in recent_rows]
+
+    flow_counter: dict[str, dict] = {}
+    origin_counter: Counter[str] = Counter()
+    attack_ip_items: list[dict] = []
+    attack_ip_lookup = {row["ip"]: row for row in attack_ip_rows}
+
+    for ip in {row["client_ip"] for row in recent_rows}:
+        _ensure_geo(ip, geo_cache)
+
+    for row in flow_seed:
+        ip = row["client_ip"]
+        geo = geo_cache.get(ip) or {}
+        bucket = _infer_geo_bucket(ip, geo)
+        source_name = _build_screen_flow_name(
+            geo.get("country", ""),
+            geo.get("region", ""),
+            geo.get("city", ""),
+            bucket,
+            geo.get("label", ""),
+        )
+        coords = _geo_coordinates(
+            geo.get("country", ""),
+            geo.get("region", ""),
+            geo.get("city", ""),
+            bucket,
+        )
+        key = f"{source_name}:{bucket}"
+        item = flow_counter.setdefault(
+            key,
+            {
+                "source_name": source_name,
+                "source_bucket": bucket,
+                "source_country": str(geo.get("country", "") or ""),
+                "source_region": str(geo.get("region", "") or ""),
+                "source_city": str(geo.get("city", "") or ""),
+                "source_label": str(geo.get("label", "") or source_name),
+                "source_lng": coords["lng"],
+                "source_lat": coords["lat"],
+                "count": 0,
+                "blocked_count": 0,
+                "high_count": 0,
+                "top_rule": row["attack_type"] or "manual_block",
+                "top_cve": row["cve_id"] or "",
+            },
+        )
+        item["count"] += 1
+        if row["action"] == "blocked":
+            item["blocked_count"] += 1
+        if row["severity"] == "high":
+            item["high_count"] += 1
+        origin_counter[source_name] += 1
+
+    globe_flows = sorted(flow_counter.values(), key=lambda item: (item["high_count"], item["count"]), reverse=True)[:8]
+    for item in globe_flows:
+        item["severity"] = "high" if item["high_count"] else ("medium" if item["blocked_count"] else "low")
+        item["target_name"] = destination_row["name"] if destination_row else SCREEN_TARGET["name"]
+        item["target_label"] = SCREEN_TARGET["label"]
+        item["target_lng"] = SCREEN_TARGET["lng"]
+        item["target_lat"] = SCREEN_TARGET["lat"]
+
+    attack_source_top = [
+        {"name": name, "count": count}
+        for name, count in origin_counter.most_common(5)
+    ]
+
+    for row in attack_ip_rows:
+        ip = row["ip"]
+        geo = geo_cache.get(ip) or {}
+        bucket = _infer_geo_bucket(ip, geo)
+        attack_ip_items.append(
+            {
+                "ip": ip,
+                "count": row["count"],
+                "high_count": row["high_count"],
+                "label": _build_location_label(
+                    geo.get("country", ""),
+                    geo.get("region", ""),
+                    geo.get("city", ""),
+                    bucket,
+                ),
+                "geo_label": str(geo.get("label", "") or ""),
+                "bucket": bucket,
+            }
+        )
+
+    critical_count = sum(
+        1
+        for row in recent_rows
+        if row["attack_type"] in {"webshell_upload", "cve_exploit_attempt", "command_injection"}
+    )
+    severity_distribution = [
+        {"name": "危急", "count": critical_count},
+        {"name": "高危", "count": overview["high_risk_alerts"]},
+        {"name": "中危", "count": max(overview["blocked_requests"] - overview["high_risk_alerts"], 0)},
+        {"name": "低危", "count": max(overview["total_requests"] - overview["blocked_requests"], 0)},
+    ]
+
+    recent_alerts = []
+    for row in recent_rows[:6]:
+        geo = geo_cache.get(row["client_ip"]) or {}
+        recent_alerts.append(
+            {
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "client_ip": row["client_ip"],
+                "path": row["path"],
+                "attack_type": row["attack_type"],
+                "attack_detail": row["attack_detail"],
+                "cve_id": row["cve_id"],
+                "severity": row["severity"],
+                "action": row["action"],
+                "location": str(geo.get("label", "") or "未知位置"),
+            }
+        )
+
+    timeline_24h = _build_hourly_trend([dict(row) for row in timeline_rows], bucket_count=24)
+    top_paths = [dict(row) for row in victim_rows]
+
+    return {
+        "window_hours": hours,
+        "target": {
+            "name": destination_row["name"] if destination_row else SCREEN_TARGET["name"],
+            "label": SCREEN_TARGET["label"],
+            "lng": SCREEN_TARGET["lng"],
+            "lat": SCREEN_TARGET["lat"],
+        },
+        "overview": overview,
+        "globe_flows": globe_flows,
+        "attack_ip_top5": attack_ip_items,
+        "attack_source_top5": attack_source_top,
+        "victim_targets_top5": top_paths,
+        "timeline_24h": timeline_24h,
+        "severity_distribution": severity_distribution,
+        "recent_alerts": recent_alerts,
+        "top_attack_types": overview["top_attack_types"],
+        "top_cve_ids": overview["top_cve_ids"],
     }
 
 

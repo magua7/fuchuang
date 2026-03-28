@@ -20,6 +20,7 @@ from .storage import (
     get_cached_ip_geo,
     get_log_detail,
     get_overview,
+    get_screen_data,
     init_db,
     list_blocked_ips,
     list_logs,
@@ -299,6 +300,12 @@ async def runtime(request: Request):
 async def overview(request: Request):
     require_api_auth(request)
     return get_overview(hours=24)
+
+
+@app.get("/api/screen")
+async def screen_data(request: Request):
+    require_api_auth(request)
+    return get_screen_data(hours=24)
 
 
 @app.post("/api/agent/overview-24h")
