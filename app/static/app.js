@@ -474,7 +474,8 @@ function getSelectedDisposition(logId) {
 
 function renderHandledStatusBadge(handledStatus) {
   const normalized = handledStatus === "handled" ? "handled" : "unhandled";
-  return `<span class="status-pill handled ${escapeHtml(normalized)}">${escapeHtml(handledStatusLabel(normalized))}</span>`;
+  const badgeClass = normalized === "handled" ? "handled-badge-success" : "handled-badge-pending";
+  return `<span class="status-pill handled ${escapeHtml(normalized)} ${badgeClass}">${escapeHtml(handledStatusLabel(normalized))}</span>`;
 }
 
 function renderAlertCategoryBadge(alertStatus) {
