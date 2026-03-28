@@ -77,6 +77,8 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at TEXT NOT NULL,
                 client_ip TEXT NOT NULL,
+                destination_host TEXT,
+                destination_ip TEXT,
                 method TEXT NOT NULL,
                 path TEXT NOT NULL,
                 query_string TEXT,
@@ -133,6 +135,8 @@ def init_db() -> None:
             ON auth_attempts(client_ip, created_at DESC);
             """
         )
+        ensure_column(connection, "request_logs", "destination_host", "destination_host TEXT")
+        ensure_column(connection, "request_logs", "destination_ip", "destination_ip TEXT")
         ensure_column(connection, "request_logs", "severity", "severity TEXT")
         ensure_column(connection, "request_logs", "alert_status", "alert_status TEXT")
         ensure_column(connection, "request_logs", "handled_status", "handled_status TEXT")
@@ -182,6 +186,8 @@ def init_db() -> None:
 def add_log(
     *,
     client_ip: str,
+    destination_host: str | None,
+    destination_ip: str | None,
     method: str,
     path: str,
     query_string: str,
@@ -202,14 +208,16 @@ def add_log(
         connection.execute(
             """
             INSERT INTO request_logs (
-                created_at, client_ip, method, path, query_string, user_agent,
+                created_at, client_ip, destination_host, destination_ip, method, path, query_string, user_agent,
                 request_headers, action, attack_type, attack_detail, cve_id, severity, alert_status, handled_status, status_updated_at,
                 status_code, upstream_status, duration_ms, body_preview
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 utcnow_iso(),
                 client_ip,
+                destination_host,
+                destination_ip,
                 method,
                 path,
                 query_string,
@@ -259,9 +267,9 @@ def list_logs(
         params.append(action)
 
     if keyword:
-        clauses.append("(client_ip LIKE ? OR path LIKE ? OR attack_type LIKE ? OR attack_detail LIKE ? OR cve_id LIKE ?)")
+        clauses.append("(client_ip LIKE ? OR destination_host LIKE ? OR destination_ip LIKE ? OR path LIKE ? OR attack_type LIKE ? OR attack_detail LIKE ? OR cve_id LIKE ?)")
         like_value = f"%{keyword}%"
-        params.extend([like_value, like_value, like_value, like_value, like_value])
+        params.extend([like_value, like_value, like_value, like_value, like_value, like_value, like_value])
 
     if severity:
         clauses.append("severity = ?")
@@ -285,7 +293,7 @@ def list_logs(
 
     total_sql = "SELECT COUNT(*) AS total " + base_sql + where_sql
     data_sql = """
-        SELECT id, created_at, client_ip, method, path, query_string, user_agent,
+        SELECT id, created_at, client_ip, destination_host, destination_ip, method, path, query_string, user_agent,
                action, attack_type, attack_detail, cve_id, severity, alert_status, handled_status,
                status_code, upstream_status, duration_ms, body_preview
     """ + base_sql + where_sql + " ORDER BY id DESC LIMIT ? OFFSET ?"
@@ -308,7 +316,7 @@ def get_log_detail(log_id: int) -> dict | None:
     with closing(get_connection()) as connection:
         row = connection.execute(
             """
-            SELECT id, created_at, client_ip, method, path, query_string, user_agent,
+            SELECT id, created_at, client_ip, destination_host, destination_ip, method, path, query_string, user_agent,
                    request_headers, action, attack_type, attack_detail, cve_id,
                    severity, alert_status, handled_status, status_updated_at, status_code,
                    upstream_status, duration_ms, body_preview

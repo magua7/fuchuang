@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import socket
 import time
+from functools import lru_cache
+from ipaddress import ip_address
 from typing import Iterable
+from urllib.parse import urlparse
 
 import httpx
 import uvicorn
@@ -96,6 +100,36 @@ def serialize_request_headers(headers: Iterable[tuple[str, str]]) -> str:
         else:
             captured[key] = value[:1000]
     return json.dumps(captured, ensure_ascii=False)
+
+
+def get_destination_host(request: Request, upstream_url: str) -> str:
+    host_header = (request.headers.get("host") or "").strip()
+    if host_header:
+        parsed = urlparse(f"//{host_header}")
+        return parsed.hostname or host_header
+    parsed_upstream = urlparse(upstream_url)
+    return parsed_upstream.hostname or ""
+
+
+@lru_cache(maxsize=512)
+def resolve_destination_ip(hostname: str) -> str:
+    hostname = (hostname or "").strip()
+    if not hostname:
+        return "-"
+    try:
+        return str(ip_address(hostname))
+    except ValueError:
+        pass
+    try:
+        candidates = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return "-"
+
+    for candidate in candidates:
+        sockaddr = candidate[4]
+        if sockaddr and sockaddr[0]:
+            return sockaddr[0]
+    return "-"
 
 
 def build_upstream_url(request: Request, full_path: str) -> str:
@@ -202,12 +236,17 @@ async def proxy(request: Request, full_path: str = "") -> Response:
     method = request.method.upper()
     path = "/" + full_path.lstrip("/")
     request_headers_json = serialize_request_headers(request.headers.items())
+    upstream_url = build_upstream_url(request, full_path)
+    destination_host = get_destination_host(request, upstream_url)
+    destination_ip = resolve_destination_ip(destination_host)
 
     manual_block_reason = get_block_reason(client_ip)
     if manual_block_reason:
         duration_ms = int((time.perf_counter() - started) * 1000)
         add_log(
             client_ip=client_ip,
+            destination_host=destination_host,
+            destination_ip=destination_ip,
             method=method,
             path=path,
             query_string=query,
@@ -229,6 +268,8 @@ async def proxy(request: Request, full_path: str = "") -> Response:
         duration_ms = int((time.perf_counter() - started) * 1000)
         add_log(
             client_ip=client_ip,
+            destination_host=destination_host,
+            destination_ip=destination_ip,
             method=method,
             path=path,
             query_string=query,
@@ -259,7 +300,6 @@ async def proxy(request: Request, full_path: str = "") -> Response:
     headers["x-real-ip"] = client_ip
     headers["x-forwarded-proto"] = request.url.scheme
     headers["x-forwarded-port"] = resolve_forwarded_port(request)
-    upstream_url = build_upstream_url(request, full_path)
 
     try:
         upstream_response = await app.state.http_client.request(
@@ -272,6 +312,8 @@ async def proxy(request: Request, full_path: str = "") -> Response:
         duration_ms = int((time.perf_counter() - started) * 1000)
         add_log(
             client_ip=client_ip,
+            destination_host=destination_host,
+            destination_ip=destination_ip,
             method=method,
             path=path,
             query_string=query,
@@ -305,6 +347,8 @@ async def proxy(request: Request, full_path: str = "") -> Response:
                 add_blocked_ip(client_ip, f"暴力破解阈值触发：{reason}", created_by="system")
                 add_log(
                     client_ip=client_ip,
+                    destination_host=destination_host,
+                    destination_ip=destination_ip,
                     method=method,
                     path=path,
                     query_string=query,
@@ -324,6 +368,8 @@ async def proxy(request: Request, full_path: str = "") -> Response:
     duration_ms = int((time.perf_counter() - started) * 1000)
     add_log(
         client_ip=client_ip,
+        destination_host=destination_host,
+        destination_ip=destination_ip,
         method=method,
         path=path,
         query_string=query,

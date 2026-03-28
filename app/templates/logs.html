@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ app_name }} - 日志中心</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260328p2" />
   </head>
   <body class="dashboard-page" data-page="logs">
     <header class="topbar">
@@ -25,7 +25,7 @@
     </header>
 
     <main class="dashboard-shell logs-shell">
-      <section class="metrics-grid">
+      <section class="logs-overview-grid">
         <article class="metric-card">
           <span class="metric-label">24h 总请求</span>
           <strong id="metric-total">0</strong>
@@ -42,9 +42,6 @@
           <span class="metric-label">当前封禁 IP</span>
           <strong id="metric-manual-blocks">0</strong>
         </article>
-      </section>
-
-      <section class="alert-metrics-grid">
         <article class="metric-card metric-card-alert">
           <span class="metric-label">24h 告警总数</span>
           <strong id="metric-alert-total">0</strong>
@@ -91,6 +88,39 @@
           <span>已通报事件告警</span>
           <strong id="alert-view-notified-event">0</strong>
         </button>
+      </section>
+
+      <section class="panel logs-guide-panel">
+        <div class="panel-header">
+          <h2>分类说明</h2>
+          <span class="panel-subtitle">帮助你快速区分攻击、业务和已通报的事件。</span>
+        </div>
+        <div class="rank-list">
+          <div class="rank-item">
+            <div>
+              <strong>真实攻击行为</strong>
+              <span class="muted-text">确认属于漏洞利用、暴力破解、恶意扫描、WebShell 上传等攻击行为。</span>
+            </div>
+          </div>
+          <div class="rank-item">
+            <div>
+              <strong>客户业务行为</strong>
+              <span class="muted-text">命中过规则，但经研判属于客户的正常业务流量或可接受操作。</span>
+            </div>
+          </div>
+          <div class="rank-item">
+            <div>
+              <strong>待确认业务行为</strong>
+              <span class="muted-text">当前还不能直接确定真伪，需要继续观察或和客户确认的事件。</span>
+            </div>
+          </div>
+          <div class="rank-item">
+            <div>
+              <strong>已通报事件告警</strong>
+              <span class="muted-text">已经完成研判、通报、升级或流转的事件，用于追踪处置闭环。</span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="logs-layout">
@@ -150,6 +180,7 @@
                   <th class="checkbox-column">选择</th>
                   <th>时间</th>
                   <th>源 IP</th>
+                  <th>目的 IP</th>
                   <th>方法</th>
                   <th>路径</th>
                   <th>动作</th>
@@ -168,42 +199,17 @@
 
           <div class="pagination-bar">
             <div id="logs-pagination-summary" class="pagination-summary">第 1 页</div>
-            <div id="logs-pagination" class="pagination-controls"></div>
+            <div class="pagination-actions">
+              <div id="logs-pagination" class="pagination-controls"></div>
+              <form id="logs-page-jump" class="pagination-jump">
+                <span id="logs-page-current" class="pagination-current">第 1 / 1 页</span>
+                <label for="logs-page-input" class="pagination-jump-label">跳转到</label>
+                <input id="logs-page-input" class="pagination-jump-input" type="number" min="1" step="1" inputmode="numeric" placeholder="页码" />
+                <button class="pagination-jump-button" type="submit">跳转</button>
+              </form>
+            </div>
           </div>
         </article>
-
-        <aside class="panel">
-          <div class="panel-header">
-            <h2>分类说明</h2>
-            <span class="panel-subtitle">帮助你快速区分攻击、业务和已通报的事件。</span>
-          </div>
-          <div class="rank-list">
-            <div class="rank-item">
-              <div>
-                <strong>真实攻击行为</strong>
-                <span class="muted-text">确认属于漏洞利用、暴力破解、恶意扫描、WebShell 上传等攻击行为。</span>
-              </div>
-            </div>
-            <div class="rank-item">
-              <div>
-                <strong>客户业务行为</strong>
-                <span class="muted-text">命中过规则，但经研判属于客户的正常业务流量或可接受操作。</span>
-              </div>
-            </div>
-            <div class="rank-item">
-              <div>
-                <strong>待确认业务行为</strong>
-                <span class="muted-text">当前还不能直接确定真伪，需要继续观察或和客户确认的事件。</span>
-              </div>
-            </div>
-            <div class="rank-item">
-              <div>
-                <strong>已通报事件告警</strong>
-                <span class="muted-text">已经完成研判、通报、升级或流转的事件，用于追踪处置闭环。</span>
-              </div>
-            </div>
-          </div>
-        </aside>
       </section>
     </main>
 
@@ -225,6 +231,14 @@
         <div class="detail-card">
           <span class="detail-label">源 IP</span>
           <strong id="detail-client-ip">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">目的 IP</span>
+          <strong id="detail-destination-ip">-</strong>
+        </div>
+        <div class="detail-card">
+          <span class="detail-label">目标主机</span>
+          <strong id="detail-destination-host">-</strong>
         </div>
         <div class="detail-card">
           <span class="detail-label">大致位置</span>
@@ -287,6 +301,6 @@
       </div>
     </aside>
 
-    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+    <script src="{{ url_for('static', path='/app.js') }}?v=20260328p2" defer></script>
   </body>
 </html>

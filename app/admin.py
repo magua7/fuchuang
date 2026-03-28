@@ -83,6 +83,8 @@ def _prepare_log_detail_for_agent(log_detail: dict) -> dict:
         "id": log_detail.get("id"),
         "created_at": log_detail.get("created_at"),
         "client_ip": log_detail.get("client_ip"),
+        "destination_host": log_detail.get("destination_host"),
+        "destination_ip": log_detail.get("destination_ip"),
         "ip_geo": log_detail.get("ip_geo", {}),
         "method": log_detail.get("method"),
         "path": log_detail.get("path"),

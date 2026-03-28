@@ -489,7 +489,7 @@ function renderLogs(items) {
   }
 
   if (!items.length) {
-    body.innerHTML = `<tr><td colspan="13"><div class="empty-state">暂无日志</div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="14"><div class="empty-state">暂无日志</div></td></tr>`;
     syncLogsSelectionUi([]);
     return;
   }
@@ -503,6 +503,8 @@ function renderLogs(items) {
       const handledStatus = item.handled_status || "not_applicable";
       const severityClass = item.severity || "low";
       const upstreamStatus = item.upstream_status || item.status_code || "-";
+      const destinationIp = item.destination_ip || "-";
+      const destinationHost = item.destination_host || "-";
 
       const buttons = [
         `<button class="small-button detail" type="button" data-detail-id="${escapeHtml(item.id)}">详情</button>`,
@@ -525,6 +527,7 @@ function renderLogs(items) {
           </td>
           <td>${escapeHtml(formatTime(item.created_at))}</td>
           <td><code>${escapeHtml(item.client_ip)}</code></td>
+          <td><code title="${escapeHtml(destinationHost)}">${escapeHtml(destinationIp)}</code></td>
           <td>${escapeHtml(item.method)}</td>
           <td><code title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</code></td>
           <td><span class="status-pill ${escapeHtml(item.action || "allowed")}">${escapeHtml(actionLabel(item.action))}</span></td>
@@ -633,9 +636,32 @@ function syncLogsSelectionUi(items) {
   bulkDispositionButton.disabled = selectedCount === 0;
 }
 
+function buildLogsPageItems(page, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set([1, 2, page - 1, page, page + 1, totalPages - 1, totalPages]);
+  const normalized = Array.from(pages)
+    .filter((value) => value >= 1 && value <= totalPages)
+    .sort((left, right) => left - right);
+
+  const items = [];
+  normalized.forEach((value, index) => {
+    if (index > 0 && value - normalized[index - 1] > 1) {
+      items.push("ellipsis");
+    }
+    items.push(value);
+  });
+  return items;
+}
+
 function renderLogsPagination(payload) {
   const summary = document.getElementById("logs-pagination-summary");
   const container = document.getElementById("logs-pagination");
+  const jumpForm = document.getElementById("logs-page-jump");
+  const jumpInput = document.getElementById("logs-page-input");
+  const currentLabel = document.getElementById("logs-page-current");
   if (!summary || !container) {
     return;
   }
@@ -648,48 +674,84 @@ function renderLogsPagination(payload) {
   if (!total) {
     summary.textContent = "暂无流量日志";
     container.innerHTML = "";
+    if (currentLabel) {
+      currentLabel.textContent = "第 0 / 0 页";
+    }
+    if (jumpForm) {
+      jumpForm.hidden = true;
+    }
     return;
   }
 
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(total, page * pageSize);
-  summary.textContent = `显示第 ${start}-${end} 条，共 ${total} 条，当前第 ${page}/${Math.max(totalPages, 1)} 页`;
-
-  const pageNumbers = [];
-  const windowSize = 5;
-  const startPage = Math.max(1, page - 2);
-  const endPage = Math.min(totalPages, startPage + windowSize - 1);
-  const adjustedStart = Math.max(1, endPage - windowSize + 1);
-  for (let value = adjustedStart; value <= endPage; value += 1) {
-    pageNumbers.push(value);
+  const safeTotalPages = Math.max(totalPages, 1);
+  summary.textContent = `显示第 ${start}-${end} 条，共 ${total} 条，当前第 ${page}/${safeTotalPages} 页`;
+  if (currentLabel) {
+    currentLabel.textContent = `第 ${page} / ${safeTotalPages} 页`;
   }
 
   const buttons = [];
+  buttons.push(`
+    <button class="pagination-button" type="button" data-page="1" ${page <= 1 ? "disabled" : ""}>
+      首页
+    </button>
+  `);
   buttons.push(`
     <button class="pagination-button" type="button" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>
       上一页
     </button>
   `);
 
-  pageNumbers.forEach((value) => {
+  buildLogsPageItems(page, safeTotalPages).forEach((item) => {
+    if (item === "ellipsis") {
+      buttons.push(`<span class="pagination-ellipsis">...</span>`);
+      return;
+    }
+
     buttons.push(`
-      <button class="pagination-button ${value === page ? "active" : ""}" type="button" data-page="${value}">
-        ${value}
+      <button class="pagination-button ${item === page ? "active" : ""}" type="button" data-page="${item}">
+        ${item}
       </button>
     `);
   });
 
   buttons.push(`
-    <button class="pagination-button" type="button" data-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>
+    <button class="pagination-button" type="button" data-page="${page + 1}" ${page >= safeTotalPages ? "disabled" : ""}>
       下一页
+    </button>
+  `);
+  buttons.push(`
+    <button class="pagination-button" type="button" data-page="${safeTotalPages}" ${page >= safeTotalPages ? "disabled" : ""}>
+      末页
     </button>
   `);
 
   container.innerHTML = buttons.join("");
+
+  if (jumpForm && jumpInput) {
+    jumpForm.hidden = safeTotalPages <= 1;
+    jumpInput.min = "1";
+    jumpInput.max = String(safeTotalPages);
+    jumpInput.value = "";
+    jumpInput.placeholder = `1-${safeTotalPages}`;
+
+    jumpForm.onsubmit = async (event) => {
+      event.preventDefault();
+      const nextPage = Number(jumpInput.value || "");
+      if (!nextPage || nextPage < 1 || nextPage > safeTotalPages || nextPage === currentLogsPage) {
+        return;
+      }
+      selectedLogEntries.clear();
+      currentLogsPage = nextPage;
+      await refreshLogsPage();
+    };
+  }
+
   container.querySelectorAll("button[data-page]").forEach((button) => {
     button.addEventListener("click", async () => {
       const nextPage = Number(button.getAttribute("data-page") || "1");
-      if (!nextPage || nextPage === currentLogsPage) {
+      if (!nextPage || nextPage < 1 || nextPage > safeTotalPages || nextPage === currentLogsPage) {
         return;
       }
       selectedLogEntries.clear();
@@ -866,6 +928,8 @@ async function openLogDetail(logId) {
 
   setText("detail-created-at", formatTime(detail.created_at));
   setText("detail-client-ip", detail.client_ip || "-");
+  setText("detail-destination-ip", detail.destination_ip || "-");
+  setText("detail-destination-host", detail.destination_host || "-");
   setText("detail-ip-location", (detail.ip_geo && detail.ip_geo.label) || "未知位置");
   setText("detail-ip-isp", (detail.ip_geo && detail.ip_geo.isp) || "-");
   setText("detail-action", actionLabel(detail.action));

@@ -657,7 +657,8 @@ body.auth-page::after {
 .content-grid,
 .situation-layout,
 .logs-layout,
-.alert-metrics-grid {
+.alert-metrics-grid,
+.logs-overview-grid {
   display: grid;
   gap: 20px;
 }
@@ -670,12 +671,29 @@ body.auth-page::after {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.logs-overview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
 .metric-card {
   border-radius: 22px;
   padding: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.88)),
     var(--panel);
+}
+
+.logs-overview-grid .metric-card {
+  min-height: 106px;
+  padding: 16px 18px;
+  border-radius: 18px;
+}
+
+.logs-overview-grid .metric-card strong {
+  margin-top: 8px;
+  font-size: 28px;
+  line-height: 1.05;
 }
 
 .metric-card strong {
@@ -729,8 +747,33 @@ body.auth-page::after {
 }
 
 .logs-layout {
-  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+  grid-template-columns: 1fr;
   align-items: start;
+}
+
+.logs-guide-panel {
+  padding: 18px 20px;
+}
+
+.logs-guide-panel .panel-header {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.logs-guide-panel .rank-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.logs-guide-panel .rank-item {
+  min-height: 100%;
+  padding: 12px 14px;
+}
+
+.logs-guide-panel .muted-text {
+  display: block;
+  line-height: 1.5;
 }
 
 .panel {
@@ -1318,6 +1361,14 @@ body.auth-page::after {
   flex-wrap: wrap;
 }
 
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .pagination-button {
   min-width: 42px;
   min-height: 38px;
@@ -1345,6 +1396,69 @@ body.auth-page::after {
 .pagination-button:disabled {
   opacity: 0.46;
   cursor: not-allowed;
+}
+
+.pagination-ellipsis {
+  align-self: center;
+  min-width: 20px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pagination-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagination-current {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pagination-jump-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pagination-jump-input {
+  width: 88px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.pagination-jump-input:focus {
+  border-color: rgba(37, 99, 235, 0.36);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.pagination-jump-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: rgba(239, 246, 255, 0.92);
+  color: var(--primary-strong);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.pagination-jump-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(219, 234, 254, 0.96);
 }
 
 table {
@@ -1575,8 +1689,13 @@ td code {
   .metrics-grid,
   .situation-layout,
   .logs-layout,
-  .alert-metrics-grid {
+  .alert-metrics-grid,
+  .logs-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .logs-guide-panel .rank-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .topbar,
@@ -1611,6 +1730,10 @@ td code {
   .topbar {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .logs-guide-panel .rank-list {
+    grid-template-columns: 1fr;
   }
 
   .topbar {
